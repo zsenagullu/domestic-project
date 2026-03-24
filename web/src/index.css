@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-domestic-red: #E63946;
+  --color-domestic-beige: #F5F5F1;
+  --color-domestic-dark: #1D3557;
+  --color-domestic-gray: #F4F4F5;
+  --color-domestic-text: #2D3748;
+  --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.08);
+  --shadow-red-glow: 0 4px 20px -5px rgba(230,57,70,0.4);
+}
+
+@layer base {
+  body {
+    @apply bg-domestic-beige text-domestic-text antialiased;
+  }
+}
