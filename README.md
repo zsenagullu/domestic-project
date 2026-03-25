@@ -1,4 +1,6 @@
-# 🧹 Domestic – Temizlik Hizmeti Platformu
+# 🧹 Temizlik hizmeti platformu – Domestic (FastAPI, React, Swift)
+
+Domestic, kullanıcılar ile ev asistanlarını buluşturan modern bir temizlik hizmeti platformudur. React, FastAPI ve Swift teknolojileriyle geliştirilmiştir.
 
 Domestic, ev asistanları ile hizmet arayan kullanıcıları bir araya getiren yenilikçi ve modern bir hizmet platformudur. Klasik temizlik platformlarından sıyrılarak esnek ve çift akışlı (pazaryeri teklif modeli + doğrudan form eşleşmesi) bir kullanıcı deneyimi sunar.
 
@@ -11,7 +13,13 @@ Domestic, ev asistanları ile hizmet arayan kullanıcıları bir araya getiren y
 - **Dinamik Yönlendirme:** Kullanıcılar kayıt olurken sistemdeki rollerini seçer ve kayıt sonrası anında ilgili dashboard'a yönlendirilirler.
 - **Modern ve Premium Kullanıcı Arayüzü:** Tailwind CSS v4 mimarisiyle, `domestic-red` ve `domestic-beige` gibi özgün renk paletleri ve modern cam (glassmorphism) efektleriyle desteklenen profesyonel görünüm.
 
-## 🛠️ Teknoloji Yığını (Tech Stack)
+## 📦 Kullanılan Teknolojiler
+
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)
+![TailwindCSS](https://img.shields.io/badge/Tailwind-38B2AC?logo=tailwind-css&logoColor=white)
+![Swift](https://img.shields.io/badge/Swift-F05138?logo=swift&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
 ### Backend
 - **Framework:** FastAPI (Python)
@@ -47,4 +55,4 @@ domestic-project/
 ```
 
 ## 🎯 Hedef
-Domestic platformu; sadece bir hizmet pazarı olmanın ötesinde, kullanıcılarına güvenilir, ekonomik ve modern bir "Ev Asistanı" deneyimi sunmayı hedefler. Kesinlikle "Temizlikçi" ibaresi kullanılmaz, her detayda premium ve konforlu bir his amaçlanmıştır.
+Domestic platformu; sadece bir hizmet pazarı olmanın ötesinde, kullanıcılarına güvenilir, ekonomik ve modern bir "Ev Asistanı" deneyimi sunmayı hedefler. Her detayda premium ve konforlu bir his amaçlanmıştır.
