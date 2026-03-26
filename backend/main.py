@@ -4,8 +4,7 @@ from database import engine, Base
 import models
 from routes import auth_routes, users, jobs, offers, ai
 
-# Create DB tables
-Base.metadata.create_all(bind=engine)
+# Create DB tables handled by Alembic
 
 app = FastAPI(
     title="Domestic App API",
@@ -39,3 +38,7 @@ app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Domestic API!"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}

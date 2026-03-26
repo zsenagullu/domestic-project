@@ -41,6 +41,10 @@ class User(Base):
     rating = Column(Float, nullable=True) # float 1-5
     skills = Column(JSON, nullable=True) # JSON/List
     
+    # Yeni eklenen özellikler
+    gender = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     jobs = relationship("Job", back_populates="owner")
@@ -57,6 +61,7 @@ class Job(Base):
     service_type = Column(Enum(ServiceTypeEnum), nullable=False)
     location = Column(String, nullable=True)
     house_size = Column(String, nullable=True)
+    price = Column(Float, nullable=True)
     
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -68,7 +73,7 @@ class Offer(Base):
     __tablename__ = "offers"
 
     id = Column(Integer, primary_key=True, index=True)
-    price = Column(Float, nullable=False) # float > 0
+    offered_price = Column(Float, nullable=False) # float > 0
     message = Column(Text, nullable=False)
     estimated_time = Column(String, nullable=False)
     status = Column(Enum(OfferStatusEnum), default=OfferStatusEnum.pending)

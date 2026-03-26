@@ -17,7 +17,7 @@ def create_offer(offer: schemas.OfferCreate, db: Session = Depends(get_db), curr
          raise HTTPException(status_code=404, detail="Job not found")
 
     db_offer = models.Offer(
-        price=offer.price,
+        offered_price=offer.offered_price,
         message=offer.message,
         estimated_time=offer.estimated_time,
         job_id=offer.job_id,

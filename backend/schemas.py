@@ -30,6 +30,8 @@ class UserBase(BaseModel):
     role: RoleEnum
     allergy_info: Optional[str] = None
     has_criminal_record: Optional[bool] = False
+    gender: Optional[str] = None
+    location: Optional[str] = None
     
     # Personel rolleri için özellikler
     hourly_rate: Optional[float] = Field(default=None, ge=0.0, description="Saatlik ücret (float >= 0)")
@@ -47,7 +49,7 @@ class UserResponse(UserBase):
 
 # -- OFFER SCHEMAS --
 class OfferBase(BaseModel):
-    price: float = Field(..., gt=0, description="Teklif fiyatı (float > 0)")
+    offered_price: float = Field(..., gt=0, description="Teklif fiyatı (float > 0)")
     message: str
     estimated_time: str
 
@@ -74,6 +76,7 @@ class JobBase(BaseModel):
     service_type: ServiceTypeEnum
     location: Optional[str] = None
     house_size: Optional[str] = None
+    price: Optional[float] = None
 
 class JobCreate(JobBase):
     pass
