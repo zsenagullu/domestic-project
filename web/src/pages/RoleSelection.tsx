@@ -30,7 +30,7 @@ export default function RoleSelection() {
             </div>
 
             <div 
-              onClick={() => navigate('/register?role=staff')}
+              onClick={() => navigate('/register?role=worker')}
               className="bg-white p-10 rounded-[2rem] shadow-sm border-2 border-transparent hover:border-[#1E3A8A] hover:shadow-xl transition-all cursor-pointer flex flex-col items-center text-center group"
             >
               <div className="w-20 h-20 bg-blue-50 text-[#1E3A8A] rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">

@@ -9,7 +9,7 @@ class ServiceTypeEnum(str, Enum):
     MARKETPLACE_BIDDING = "MARKETPLACE_BIDDING"
 class RoleEnum(str, Enum):
     customer = "customer"
-    staff = "staff"
+    worker = "worker"
 
 class JobStatusEnum(str, Enum):
     open = "open"
@@ -39,6 +39,10 @@ class UserBase(BaseModel):
     skills: Optional[List[str]] = Field(default=None, description="Yetkinlikler listesi")
 
 class UserCreate(UserBase):
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
     password: str
 
 class UserResponse(UserBase):

@@ -29,6 +29,7 @@ export default function Register() {
         password,
         role: requestedRole
       });
+      console.log("Register Response:", res.data);
       
       // Auto login post registration
       const formData = new URLSearchParams();
@@ -39,15 +40,25 @@ export default function Register() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       
-      login(loginRes.data.access_token, res.data);
+      console.log("Login (Auto) Response:", loginRes.data);
       
-      if (res.data.role === 'customer') {
-        navigate('/dashboard/customer');
+      if (loginRes.data && loginRes.data.access_token) {
+        login(loginRes.data.access_token, res.data);
+        
+        if (res.data.role === 'customer') {
+          navigate('/dashboard/customer');
+        } else {
+          navigate('/dashboard/worker');
+        }
       } else {
-        navigate('/dashboard/worker');
+        console.error("Token not found in response:", loginRes.data);
+        setError("Token alınamadı, lütfen giriş yapmayı deneyin.");
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Kayıt olurken bir hata oluştu');
+      console.error("Register Error:", err.response?.data || err.message);
+      const errorMessage = err.response?.data?.detail || 'Kayıt olurken bir hata oluştu';
+      setError(errorMessage);
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }

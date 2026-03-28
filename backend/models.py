@@ -6,7 +6,7 @@ from database import Base
 
 class RoleEnum(str, enum.Enum):
     customer = "customer" # Müşteri
-    staff = "staff"       # Personel
+    worker = "worker"     # Çalışan / Personel
 
 class JobStatusEnum(str, enum.Enum):
     open = "open"

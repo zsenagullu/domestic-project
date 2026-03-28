@@ -27,20 +27,32 @@ export default function Login() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
 
-      // Get user profile to determine role
-      const userRes = await axiosInstance.get('/users/me', {
-        headers: { Authorization: `Bearer ${loginRes.data.access_token}` }
-      });
-      
-      login(loginRes.data.access_token, userRes.data);
-      
-      if (userRes.data.role === 'customer') {
-        navigate('/dashboard/customer');
+      console.log("Login Response:", loginRes.data);
+
+      if (loginRes.data && loginRes.data.access_token) {
+        // Get user profile to determine role
+        const userRes = await axiosInstance.get('/users/me', {
+          headers: { Authorization: `Bearer ${loginRes.data.access_token}` }
+        });
+        
+        console.log("User Me Response:", userRes.data);
+        
+        login(loginRes.data.access_token, userRes.data);
+        
+        if (userRes.data.role === 'customer') {
+          navigate('/dashboard/customer');
+        } else {
+          navigate('/dashboard/worker');
+        }
       } else {
-        navigate('/dashboard/worker');
+        console.error("Login Error: Token not found", loginRes.data);
+        setError("Token alınamadı, giriş başarısız.");
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Giriş yaparken bir hata oluştu');
+      console.error("Login Error:", err.response?.data || err.message);
+      const errorMessage = err.response?.data?.detail || "Giriş yaparken bir hata oluştu!";
+      setError(errorMessage);
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }

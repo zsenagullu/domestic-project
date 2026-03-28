@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { axiosInstance } from '../api/axiosInstance';
 
-export type UserRole = 'customer' | 'staff';
+export type UserRole = 'customer' | 'worker';
 
 interface User {
   id: number;

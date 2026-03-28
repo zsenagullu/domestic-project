@@ -10,7 +10,7 @@ export default function WorkerDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <div className="flex h-screen items-center justify-center">Yükleniyor...</div>;
-  if (!isAuthenticated || user?.role !== 'staff') return <Navigate to="/login" replace />;
+  if (!isAuthenticated || user?.role !== 'worker') return <Navigate to="/login" replace />;
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pt-20">

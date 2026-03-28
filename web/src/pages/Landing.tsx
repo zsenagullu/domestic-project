@@ -7,7 +7,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col min-h-screen bg-domestic-beige">
+    <div className="flex flex-col min-h-screen bg-domestic-beige pt-20">
       <Navbar />
       
       <section className="relative pt-32 pb-40 lg:pt-40 lg:pb-48 overflow-hidden bg-domestic-beige flex-grow">

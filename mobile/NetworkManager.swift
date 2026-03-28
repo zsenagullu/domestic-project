@@ -58,4 +58,19 @@ class NetworkManager {
         let newJob = try JSONDecoder().decode(Job.self, from: data)
         return newJob
     }
+    func testConnection() async {
+        guard let url = URL(string: "http://host.docker.internal:8000/health") else {
+            print("❌ Invalid URL")
+            return
+        }
+        
+        do {
+            let (_, response) = try await URLSession.shared.data(from: url)
+            if let httpResponse = response as? HTTPURLResponse {
+                print("✅ Connection Test Result: \(httpResponse.statusCode)")
+            }
+        } catch {
+            print("❌ Connection Test Error: \(error.localizedDescription)")
+        }
+    }
 }
