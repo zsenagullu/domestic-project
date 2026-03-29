@@ -14,7 +14,7 @@ struct AuthResponse: Codable {
 // MARK: - Enums
 enum Role: String, Codable {
     case customer
-    case staff
+    case worker
 }
 
 enum JobStatus: String, Codable {

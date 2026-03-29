@@ -48,7 +48,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     jobs = relationship("Job", back_populates="owner")
-    offers = relationship("Offer", back_populates="staff_member")
+    offers = relationship("Offer", back_populates="worker")
 
 class Job(Base):
     __tablename__ = "jobs"
@@ -83,4 +83,4 @@ class Offer(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     job = relationship("Job", back_populates="offers")
-    staff_member = relationship("User", back_populates="offers")
+    worker = relationship("User", back_populates="offers")

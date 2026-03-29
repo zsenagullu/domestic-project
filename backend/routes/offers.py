@@ -9,8 +9,8 @@ router = APIRouter()
 
 @router.post("/", response_model=schemas.OfferResponse)
 def create_offer(offer: schemas.OfferCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_active_user)):
-    if current_user.role != models.RoleEnum.staff:
-         raise HTTPException(status_code=403, detail="Only staff can create offers")
+    if current_user.role != models.RoleEnum.worker:
+         raise HTTPException(status_code=403, detail="Only workers can create offers")
          
     job = db.query(models.Job).filter(models.Job.id == offer.job_id).first()
     if not job:

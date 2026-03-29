@@ -4,6 +4,7 @@ import FormFlowIntro from '../../components/FormFlowIntro';
 import PostJobIntro from '../../components/PostJobIntro';
 import FormSection from '../../components/FormSection';
 import Results from '../../components/Results';
+import PostJobModal from '../../components/PostJobModal';
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -11,6 +12,7 @@ import { Navigate } from 'react-router-dom';
 export default function CustomerDashboard() {
   const [formDataSubmitted, setFormDataSubmitted] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showPostJobModal, setShowPostJobModal] = useState(false);
   const { user, isAuthenticated, isLoading } = useAuth();
 
   const handleScrollToForm = () => {
@@ -43,12 +45,17 @@ export default function CustomerDashboard() {
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-20 w-full mb-20">
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
             <FormFlowIntro onToggleForm={handleScrollToForm} />
-            <PostJobIntro />
+            <PostJobIntro onPostJob={() => setShowPostJobModal(true)} />
           </div>
         </section>
 
         {showForm && <FormSection setFormDataSubmitted={setFormDataSubmitted} />}
         {formDataSubmitted && <Results />}
+
+        <PostJobModal 
+          isOpen={showPostJobModal} 
+          onClose={() => setShowPostJobModal(false)} 
+        />
       </main>
 
       <Footer />

@@ -7,6 +7,8 @@ import Register from './pages/Register';
 import CustomerDashboard from './pages/dashboard/CustomerDashboard';
 import WorkerDashboard from './pages/dashboard/WorkerDashboard';
 
+import ProtectedRoute from './components/ProtectedRoute';
+
 function App() {
   return (
     <Routes>
@@ -15,8 +17,25 @@ function App() {
       <Route path="/role-selection" element={<RoleSelection />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/dashboard/customer" element={<CustomerDashboard />} />
-      <Route path="/dashboard/worker" element={<WorkerDashboard />} />
+      
+      {/* Protected Dashboard Routes */}
+      <Route 
+        path="/dashboard/customer" 
+        element={
+          <ProtectedRoute requiredRole="customer">
+            <CustomerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      <Route 
+        path="/dashboard/worker" 
+        element={
+          <ProtectedRoute requiredRole="worker">
+            <WorkerDashboard />
+          </ProtectedRoute>
+        } 
+      />
+      
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
