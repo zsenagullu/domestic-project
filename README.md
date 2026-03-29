@@ -25,7 +25,10 @@ Domestic, ev asistanları ile hizmet arayan kullanıcıları bir araya getiren y
 - **Araçlar:** Axios (Interceptor destekli)
 
 ### Mobil (iOS / Swift)
-- *Geliştirme aşamasında...* (Mobil taraf iOS Swift yapılandırması üzerinde çalışılmaktadır.)
+- **Framework:** SwiftUI
+- **Mimari:** MVVM Pattern, NetworkManager (Network Katmanı)
+- **Özellikler:** 4 Adımlı Onboarding, Rol Bazlı Kayıt/Giriş (Auth), Müşteri ve Çalışan Dashboard'ları, İlan Yönetimi ve Pazaryeri Filtreleme.
+- **Entegrasyon:** Backend API ile tam uyumlu (Axios benzeri NetworkManager katmanı).
 
 ## 📁 Proje Yapısı
 
