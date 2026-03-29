@@ -1,16 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Briefcase, FileText, User } from 'lucide-react';
+import { Briefcase, FileText, User, MapPin, Home, DollarSign, Calendar, Loader2 } from 'lucide-react';
+import { axiosInstance } from '../../api/axiosInstance';
+
+interface Job {
+  id: number;
+  title: string;
+  description: string;
+  location?: string;
+  house_size?: string;
+  price?: number;
+  created_at: string;
+  service_type: string;
+}
 
 export default function WorkerDashboard() {
   const [activeTab, setActiveTab] = useState<'open_jobs' | 'bids' | 'profile'>('open_jobs');
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  
+  // Job states
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [isJobsLoading, setIsJobsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isLoading) return <div className="flex h-screen items-center justify-center">Yükleniyor...</div>;
-  if (!isAuthenticated || user?.role !== 'staff') return <Navigate to="/login" replace />;
+  useEffect(() => {
+    if (activeTab === 'open_jobs') {
+      fetchJobs();
+    }
+  }, [activeTab]);
+
+  const fetchJobs = async () => {
+    setIsJobsLoading(true);
+    setError(null);
+    try {
+      const response = await axiosInstance.get('/jobs/');
+      setJobs(response.data);
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
+      setError('İlanlar yüklenemedi. Lütfen daha sonra tekrar deneyiniz.');
+    } finally {
+      setIsJobsLoading(false);
+    }
+  };
+
+  const handleGiveOffer = () => {
+    alert("Teklif verme özelliği yakında eklenecek!");
+  };
+
+  if (authLoading) return <div className="flex h-screen items-center justify-center">Yükleniyor...</div>;
+  if (!isAuthenticated || user?.role !== 'worker') return <Navigate to="/login" replace />;
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 pt-20">
@@ -67,16 +108,90 @@ export default function WorkerDashboard() {
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mb-20 min-h-[300px]">
             {activeTab === 'open_jobs' && (
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Pazaryeri (Açık İlanlar)</h2>
-                <p className="text-gray-500 mb-8 font-medium">
-                  Burada müşterilerin oluşturduğu genel açık ilanları görebilirsiniz. Listeyi inceleyip sana uygun olanlara teklif ver!
-                </p>
-                <div className="border border-dashed border-gray-300 rounded-2xl p-10 flex text-center justify-center text-gray-400 font-bold">
-                  İlan veritabanı yakında entegre edilecek...
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Pazaryeri (Açık İlanlar)</h2>
+                    <p className="text-gray-500 font-medium">
+                      İlanları inceleyip sana uygun olanlara teklif ver!
+                    </p>
+                  </div>
+                  <button 
+                    onClick={fetchJobs}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-blue-600"
+                    title="Yenile"
+                  >
+                    <Loader2 size={24} className={isJobsLoading ? 'animate-spin' : ''} />
+                  </button>
                 </div>
+
+                {isJobsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 grayscale opacity-70">
+                    <Loader2 size={48} className="animate-spin text-blue-600 mb-4" />
+                    <p className="text-gray-500 font-medium">İlanlar yükleniyor...</p>
+                  </div>
+                ) : error ? (
+                  <div className="bg-red-50 border border-red-200 text-red-700 p-6 rounded-2xl text-center font-bold">
+                    {error}
+                  </div>
+                ) : jobs.filter(job => job.service_type === 'MARKETPLACE_BIDDING').length === 0 ? (
+                  <div className="border border-dashed border-gray-300 rounded-2xl p-16 flex flex-col items-center text-center justify-center text-gray-400">
+                    <Briefcase size={48} className="mb-4 opacity-20" />
+                    <p className="text-xl font-bold">Henüz teklif alımına açık ilan yok.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {jobs
+                      .filter(job => job.service_type === 'MARKETPLACE_BIDDING')
+                      .map((job) => (
+                        <div key={job.id} className="group bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 hover:border-blue-200">
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#1E3A8A] transition-colors">{job.title}</h3>
+                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${
+                              job.service_type === 'MARKETPLACE_BIDDING' 
+                                ? 'bg-green-50 text-green-600' 
+                                : 'bg-blue-50 text-blue-600'
+                            }`}>
+                              {job.service_type === 'MARKETPLACE_BIDDING' ? 'Teklif Alımı' : 'Hızlı Eşleşme'}
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-3 mb-6">
+                          <div className="flex items-center gap-2 text-gray-500 text-sm italic">
+                            <MapPin size={16} className="text-blue-500" />
+                            {job.location || 'Konum belirtilmedi'}
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-gray-600 text-sm">
+                            <Home size={16} className="text-gray-400" />
+                            <span>Ev Büyüklüğü: </span>
+                            <span className="font-bold text-gray-800">{job.house_size === 'small' ? 'Küçük' : job.house_size === 'medium' ? 'Orta' : 'Büyük'}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 text-gray-600 text-sm">
+                            <DollarSign size={16} className="text-green-600" />
+                            <span>Bütçe: </span>
+                            <span className="font-bold text-green-700">{job.price ? `${job.price} TL` : 'Belirtilmedi'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-gray-400 text-xs">
+                            <Calendar size={14} />
+                            <span>{new Date(job.created_at).toLocaleDateString('tr-TR')}</span>
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={handleGiveOffer}
+                          className="w-full bg-[#1E3A8A] text-white py-3 rounded-xl font-bold hover:bg-blue-800 transition-colors shadow-sm"
+                        >
+                          Teklif Ver
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-            
+
             {activeTab === 'bids' && (
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-4">Mevcut Tekliflerim</h2>

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { axiosInstance } from '../api/axiosInstance';
 
-export type UserRole = 'customer' | 'staff';
+export type UserRole = 'customer' | 'worker';
 
 interface User {
   id: number;
@@ -32,6 +32,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
           const response = await axiosInstance.get('/users/me');
           setUser(response.data);
+          localStorage.setItem('role', response.data.role);
         } catch (error) {
           console.error("Failed to fetch user:", error);
           localStorage.removeItem('token');
@@ -44,11 +45,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = (token: string, user: User) => {
     localStorage.setItem('token', token);
+    localStorage.setItem('role', user.role);
     setUser(user);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('role');
     setUser(null);
   };
 

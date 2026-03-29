@@ -7,22 +7,30 @@ export const axiosInstance = axios.create({
   },
 });
 
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
+// Request interceptor to add the token to every request
+axiosInstance.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    // Axios 1.x property-based or method-based header setting
+    if (config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
 
+// Response interceptor to handle errors globally
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error('API Error:', error);
-    // You can handle global toast notifications here if desired
+    if (error.response?.status === 401) {
+      // Optional: Redirect to login or clear state
+      // localStorage.removeItem('token');
+      // window.location.href = '/login';
+    }
     return Promise.reject(error);
   }
 );

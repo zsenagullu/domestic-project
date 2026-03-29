@@ -9,7 +9,7 @@ class ServiceTypeEnum(str, Enum):
     MARKETPLACE_BIDDING = "MARKETPLACE_BIDDING"
 class RoleEnum(str, Enum):
     customer = "customer"
-    staff = "staff"
+    worker = "worker"
 
 class JobStatusEnum(str, Enum):
     open = "open"
@@ -30,6 +30,8 @@ class UserBase(BaseModel):
     role: RoleEnum
     allergy_info: Optional[str] = None
     has_criminal_record: Optional[bool] = False
+    gender: Optional[str] = None
+    location: Optional[str] = None
     
     # Personel rolleri için özellikler
     hourly_rate: Optional[float] = Field(default=None, ge=0.0, description="Saatlik ücret (float >= 0)")
@@ -37,6 +39,10 @@ class UserBase(BaseModel):
     skills: Optional[List[str]] = Field(default=None, description="Yetkinlikler listesi")
 
 class UserCreate(UserBase):
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
     password: str
 
 class UserResponse(UserBase):
@@ -47,7 +53,7 @@ class UserResponse(UserBase):
 
 # -- OFFER SCHEMAS --
 class OfferBase(BaseModel):
-    price: float = Field(..., gt=0, description="Teklif fiyatı (float > 0)")
+    offered_price: float = Field(..., gt=0, description="Teklif fiyatı (float > 0)")
     message: str
     estimated_time: str
 
@@ -74,6 +80,7 @@ class JobBase(BaseModel):
     service_type: ServiceTypeEnum
     location: Optional[str] = None
     house_size: Optional[str] = None
+    price: Optional[float] = None
 
 class JobCreate(JobBase):
     pass
