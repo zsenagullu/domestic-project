@@ -9,6 +9,11 @@ struct CustomerDashboardView: View {
     @State private var showCreateJobSheet = false
     @State private var showDirectBookingSheet = false
     
+    // Offers states
+    @State private var myJobs: [Job] = []
+    @State private var isLoadingOffers = false
+    @State private var offersErrorMessage: String?
+    
     // Domestic Red Palette
     private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255) // #E63946
 
@@ -56,7 +61,62 @@ struct CustomerDashboardView: View {
                 }
                 .padding(.horizontal)
                 
-                Spacer(minLength: 50)
+                // MARK: - Incoming Offers Section
+                VStack(alignment: .leading, spacing: 15) {
+                    HStack {
+                        Text("Gelen Teklifler")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Spacer()
+                        if isLoadingOffers {
+                            ProgressView()
+                        } else {
+                            Button(action: { Task { await fetchMyJobsAndOffers() } }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.subheadline)
+                                    .foregroundColor(domesticRed)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    if myJobs.isEmpty && !isLoadingOffers {
+                        VStack(spacing: 15) {
+                            Image(systemName: "envelope.open")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray.opacity(0.3))
+                            Text("Henüz bir teklif gelmedi.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 30)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .padding(.horizontal)
+                    } else {
+                        VStack(spacing: 16) {
+                            ForEach(myJobs) { job in
+                                if let offers = job.offers, !offers.isEmpty {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text(job.title)
+                                            .font(.headline)
+                                            .padding(.horizontal, 5)
+                                        
+                                        ForEach(offers) { offer in
+                                            IncomingOfferCard(offer: offer, accentColor: domesticRed) { status in
+                                                Task { await handleOfferAction(offerId: offer.id, status: status) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                
+                Spacer(minLength: 30)
                 
                 // Logout Button
                 Button(action: {
@@ -77,6 +137,9 @@ struct CustomerDashboardView: View {
             }
         }
         .background(Color(.systemGroupedBackground))
+        .onAppear {
+            Task { await fetchMyJobsAndOffers() }
+        }
         .alert("Bilgi", isPresented: $showComingSoonAlert) {
             Button("Tamam", role: .cancel) {}
         } message: {
@@ -87,6 +150,49 @@ struct CustomerDashboardView: View {
         }
         .sheet(isPresented: $showDirectBookingSheet) {
             DirectBookingSheet(isPresented: $showDirectBookingSheet)
+        }
+    }
+    
+    func fetchMyJobsAndOffers() async {
+        guard let tokenValue = token else { return }
+        
+        await MainActor.run { isLoadingOffers = true }
+        
+        do {
+            let allJobs = try await NetworkManager.shared.fetchJobs(token: tokenValue)
+            let userResponse = try await fetchCurrentUserId(token: tokenValue)
+            let filtered = allJobs.filter { $0.userId == userResponse.id }
+            
+            await MainActor.run {
+                self.myJobs = filtered
+                self.isLoadingOffers = false
+            }
+        } catch {
+            await MainActor.run {
+                self.offersErrorMessage = "Teklifler yüklenemedi."
+                self.isLoadingOffers = false
+            }
+        }
+    }
+    
+    func fetchCurrentUserId(token: String) async throws -> User {
+        guard let url = URL(string: "http://127.0.0.1:8000/api/v1/users/me") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(User.self, from: data)
+    }
+    
+    func handleOfferAction(offerId: Int, status: String) async {
+        guard let tokenValue = token else { return }
+        
+        do {
+            try await NetworkManager.shared.updateOfferStatus(offerId: offerId, status: status, token: tokenValue)
+            await fetchMyJobsAndOffers()
+        } catch {
+            print("Error updating offer: \(error)")
         }
     }
 }
@@ -376,4 +482,118 @@ struct DashboardCard: View {
 
 #Preview {
     CustomerDashboardView()
+}
+
+struct IncomingOfferCard: View {
+    let offer: Offer
+    let accentColor: Color
+    let onAction: (String) -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.fill")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Text(offer.worker?.name ?? "Uzman")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                }
+                Spacer()
+                statusBadge(offer.status)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Teklif:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(Int(offer.offeredPrice)) TL")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.green)
+                }
+                
+                HStack {
+                    Text("Süre:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(offer.estimatedTime ?? "Belirtilmedi")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+                
+                if !offer.message.isEmpty {
+                    Text(offer.message)
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .italic()
+                        .padding(.top, 4)
+                }
+            }
+            
+            if offer.status == .pending {
+                Divider()
+                    .padding(.vertical, 4)
+                
+                HStack(spacing: 12) {
+                    Button(action: { onAction("accepted") }) {
+                        HStack {
+                            Image(systemName: "check.circle.fill")
+                            Text("Kabul Et")
+                        }
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
+                    
+                    Button(action: { onAction("rejected") }) {
+                        HStack {
+                            Image(systemName: "x.circle.fill")
+                            Text("Reddet")
+                        }
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.white)
+                        .foregroundColor(.red)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.red, lineWidth: 1)
+                        )
+                    }
+                }
+            }
+        }
+        .padding(15)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+    }
+    
+    @ViewBuilder
+    private func statusBadge(_ status: OfferStatus) -> some View {
+        let (text, color) = statusDetails(status)
+        Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.1))
+            .foregroundColor(color)
+            .cornerRadius(5)
+    }
+    
+    private func statusDetails(_ status: OfferStatus) -> (String, Color) {
+        switch status {
+        case .pending: return ("BEKLEMEDE", .orange)
+        case .accepted: return ("KABUL EDİLDİ", .green)
+        case .rejected: return ("REDDEDİLDİ", .red)
+        }
+    }
 }

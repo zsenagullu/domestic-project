@@ -5,93 +5,124 @@ struct RegisterView: View {
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var role: String = "customer"
     @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var registrationSuccess = false
     
-    // Geçici olarak onboarding'den gelen rolü alıyoruz veya default veriyoruz
-    @AppStorage("selectedRole") var selectedRole: String = "customer"
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var isSuccess = false
+    
+    let primaryRed = Color(red: 230/255, green: 57/255, blue: 70/255) // #E63946
 
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Text("Yeni Hesap Oluştur")
-                    .font(.largeTitle)
-                    .bold()
-                    .padding(.top, 40)
-                
-                Text(selectedRole == "customer" ? "Müşteri Hesabı" : "Ev Asistanı Hesabı")
-                    .foregroundColor(.secondary)
-                
-                VStack(spacing: 15) {
-                    TextField("Ad Soyad", text: $name)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                    
-                    TextField("E-posta", text: $email)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .autocapitalization(.none)
-                        .keyboardType(.emailAddress)
-                    
-                    SecureField("Şifre", text: $password)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+        VStack(spacing: 20) {
+            // Header / Back Button
+            HStack {
+                Button(action: { dismiss() }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                        Text("Geri")
+                    }
+                    .foregroundColor(primaryRed)
+                    .font(.headline)
                 }
-                .padding(.horizontal)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 20)
+            
+            Text("Domestic")
+                .font(.system(size: 40, weight: .black))
+                .foregroundColor(.primary)
+            
+            Text("Yeni Hesap Oluştur")
+                .font(.title2)
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 15) {
+                TextField("Ad Soyad", text: $name)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
                 
-                if let error = errorMessage {
-                    Text(error)
-                        .foregroundColor(.red)
-                        .font(.caption)
+                TextField("E-posta", text: $email)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .autocapitalization(.none)
+                    .keyboardType(.emailAddress)
+                    .padding(.horizontal)
+                
+                SecureField("Şifre", text: $password)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal)
+                
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Rolünüzü Seçin")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                    
+                    HStack(spacing: 20) {
+                        roleButton(title: "Müşteri", value: "customer")
+                        roleButton(title: "Ev Asistanı", value: "worker")
+                    }
+                    .padding(.horizontal)
                 }
-                
-                Button(action: register) {
-                    if isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    } else {
-                        Text("Kayıt Ol")
-                            .bold()
-                            .frame(maxWidth: .infinity)
+                .padding(.top, 10)
+            }
+            
+            Button(action: register) {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Text("Kayıt Ol")
+                        .bold()
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding()
+            .background(primaryRed)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .padding(.horizontal)
+            .padding(.top, 20)
+            .disabled(isLoading || name.isEmpty || email.isEmpty || password.isEmpty)
+            
+            Spacer()
+        }
+        .alert(isPresented: $showAlert) {
+            Alert(
+                title: Text(isSuccess ? "Başarılı" : "Hata"),
+                message: Text(alertMessage),
+                dismissButton: .default(Text("Tamam")) {
+                    if isSuccess {
+                        dismiss()
                     }
                 }
-                .padding()
-                .background(Color(red: 230/255, green: 57/255, blue: 70/255))
-                .foregroundColor(.white)
-                .cornerRadius(12)
-                .padding(.horizontal)
-                .disabled(isLoading)
-                
-                if registrationSuccess {
-                    Text("Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz.")
-                        .foregroundColor(.green)
-                        .font(.caption)
-                }
-
-                Spacer()
-                
-                Button("Zaten hesabınız var mı? Giriş Yap") {
-                    dismiss()
-                }
+            )
+        }
+    }
+    
+    private func roleButton(title: String, value: String) -> some View {
+        Button(action: { role = value }) {
+            Text(title)
                 .font(.subheadline)
-                .foregroundColor(.blue)
-            }
-            .navigationBarItems(leading: Button("İptal") { dismiss() })
+                .fontWeight(.bold)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(role == value ? primaryRed : Color.gray.opacity(0.1))
+                .foregroundColor(role == value ? .white : .primary)
+                .cornerRadius(10)
         }
     }
 
     func register() {
-        guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
-            errorMessage = "Lütfen tüm alanları doldurun."
-            return
-        }
-        
         isLoading = true
-        errorMessage = nil
         
-        let registerData: [String: Any] = [
+        let registerData: [String: String] = [
             "name": name,
             "email": email,
             "password": password,
-            "role": selectedRole
+            "role": role
         ]
         
         guard let url = URL(string: "http://127.0.0.1:8000/api/v1/auth/register") else { return }
@@ -103,7 +134,9 @@ struct RegisterView: View {
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: registerData)
         } catch {
-            errorMessage = "Data error"
+            alertMessage = "Veri hatası"
+            isSuccess = false
+            showAlert = true
             isLoading = false
             return
         }
@@ -113,21 +146,30 @@ struct RegisterView: View {
                 isLoading = false
                 
                 if let error = error {
-                    self.errorMessage = error.localizedDescription
+                    self.alertMessage = error.localizedDescription
+                    self.isSuccess = false
+                    self.showAlert = true
                     return
                 }
                 
                 if let httpResponse = response as? HTTPURLResponse {
                     if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
-                        self.registrationSuccess = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            dismiss()
-                        }
+                        self.alertMessage = "Kayıt başarılı! Giriş yapabilirsiniz."
+                        self.isSuccess = true
+                        self.showAlert = true
                     } else {
-                        self.errorMessage = "Kayıt hatası (Kod: \(httpResponse.statusCode))"
+                        self.alertMessage = "Kayıt başarısız, tekrar deneyin."
+                        self.isSuccess = false
+                        self.showAlert = true
                     }
                 }
             }
         }.resume()
+    }
+}
+
+struct RegisterView_Previews: PreviewProvider {
+    static var previews: some View {
+        RegisterView()
     }
 }

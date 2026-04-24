@@ -66,9 +66,10 @@ struct Job: Codable, Identifiable {
     let price: Double?
     let userId: Int
     let createdAt: String
+    let offers: [Offer]?
     
     enum CodingKeys: String, CodingKey {
-        case id, title, description, status
+        case id, title, description, status, offers
         case photoURL = "photo_url"
         case serviceType = "service_type"
         case location, price
@@ -88,10 +89,11 @@ struct Offer: Codable, Identifiable {
     let jobId: Int
     let userId: Int
     let createdAt: String
-    let job: Job? // Nested job info often returned in /offers/user/me
+    let job: Job? 
+    let worker: User?
     
     enum CodingKeys: String, CodingKey {
-        case id, status, job, message
+        case id, status, job, message, worker
         case offeredPrice = "offered_price"
         case estimatedTime = "estimated_time"
         case jobId = "job_id"
