@@ -68,6 +68,35 @@ class NetworkManager {
         return newJob
     }
 
+    func createOffer(jobId: Int, offeredPrice: Double, message: String, estimatedTime: String, token: String) async throws {
+        guard let url = URL(string: "\(baseURL)/offers/") else {
+            throw URLError(.badURL)
+        }
+        
+        let offerData: [String: Any] = [
+            "job_id": jobId,
+            "offered_price": offeredPrice,
+            "message": message,
+            "estimated_time": estimatedTime
+        ]
+        
+        guard let body = try? JSONSerialization.data(withJSONObject: offerData) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+    }
+
     func fetchMyOffers(token: String) async throws -> [Offer] {
         guard let url = URL(string: "\(baseURL)/offers/user/me") else {
             throw URLError(.badURL)
