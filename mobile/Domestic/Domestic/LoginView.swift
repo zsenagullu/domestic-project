@@ -53,9 +53,18 @@ struct LoginView: View {
                 .padding(.horizontal)
                 .disabled(isLoading)
                 
+                NavigationLink(destination: RegisterView().navigationBarHidden(true)) {
+                    Text("Hesabın yok mu? Kayıt Ol")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                }
+                .padding(.top, 10)
+                
                 Spacer()
             }
             .padding(.top, 50)
+            .navigationTitle("")
+            .navigationBarHidden(true)
         }
     }
 

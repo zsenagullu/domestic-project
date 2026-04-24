@@ -114,6 +114,29 @@ class NetworkManager {
         
         return try JSONDecoder().decode([Offer].self, from: data)
     }
+
+    func updateOfferStatus(offerId: Int, status: String, token: String) async throws {
+        guard let url = URL(string: "\(baseURL)/offers/\(offerId)/status") else {
+            throw URLError(.badURL)
+        }
+        
+        let statusData = ["status": status]
+        guard let body = try? JSONSerialization.data(withJSONObject: statusData) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+    }
     
     func validateToken(_ token: String) async throws {
         guard let url = URL(string: "\(baseURL)/users/me") else {
