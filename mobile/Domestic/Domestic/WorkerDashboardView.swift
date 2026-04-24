@@ -35,7 +35,9 @@ struct OpenJobsView: View {
     @State private var jobs: [Job] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var showOfferAlert = false
+    @State private var selectedJob: Job?
+    @State private var showOfferSheet = false
+
     
     private var filteredJobs: [Job] {
         jobs.filter { $0.serviceType == .marketplaceBidding }
@@ -94,8 +96,10 @@ struct OpenJobsView: View {
                         LazyVStack(spacing: 16) {
                             ForEach(filteredJobs) { job in
                                 JobCardView(job: job, accentColor: workerBlue, onOffer: {
-                                    showOfferAlert = true
+                                    selectedJob = job
+                                    showOfferSheet = true
                                 })
+
                             }
                         }
                         .padding()
@@ -107,14 +111,13 @@ struct OpenJobsView: View {
             }
             .navigationTitle("")
             .navigationBarHidden(true)
+            .sheet(item: $selectedJob) { job in
+                OfferSheetView(job: job, workerBlue: workerBlue)
+            }
             .onAppear {
                 Task { await fetchJobs() }
             }
-            .alert("Bilgi", isPresented: $showOfferAlert) {
-                Button("Tamam", role: .cancel) {}
-            } message: {
-                Text("Teklif verme yakında eklenecek")
-            }
+
         }
     }
 
@@ -130,6 +133,134 @@ struct OpenJobsView: View {
     }
 }
 
+// MARK: - Offer Sheet
+struct OfferSheetView: View {
+    let job: Job
+    let workerBlue: Color
+    @Environment(\.dismiss) var dismiss
+    @AppStorage("token") var token: String?
+    
+    @State private var offeredPrice: String = ""
+    @State private var message: String = ""
+    @State private var estimatedTime: String = ""
+    @State private var isLoading = false
+    
+    @State private var showAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    @State private var shouldDismissOnAlertClose = false
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("İş Detayları")) {
+                    Text(job.title)
+                        .font(.headline)
+                        .foregroundColor(workerBlue)
+                    if let price = job.price {
+                        Text("Müşteri Bütçesi: \(Int(price)) TL")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Section(header: Text("Teklifiniz")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Teklif Fiyatı (TL)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Örn: 1200", text: $offeredPrice)
+                            .keyboardType(.numberPad)
+                            .padding(10)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Tahmini Süre")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Örn: 3 saat", text: $estimatedTime)
+                            .padding(10)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Mesajınız")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $message)
+                            .frame(minHeight: 120)
+                            .padding(4)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                }
+                .padding(.vertical, 4)
+                
+                Section {
+                    Button(action: sendOffer) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Teklif Gönder")
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                    }
+                    .listRowBackground(workerBlue)
+                    .disabled(isLoading || offeredPrice.isEmpty || message.isEmpty || estimatedTime.isEmpty)
+                }
+            }
+            .navigationTitle("Teklif Ver")
+            .navigationBarItems(trailing: Button("Vazgeç") { dismiss() }.foregroundColor(.secondary))
+            .alert(isPresented: $showAlert) {
+                Alert(
+                    title: Text(alertTitle),
+                    message: Text(alertMessage),
+                    dismissButton: .default(Text("Tamam")) {
+                        if shouldDismissOnAlertClose {
+                            dismiss()
+                        }
+                    }
+                )
+            }
+        }
+    }
+    
+    private func sendOffer() {
+        guard let token = token, let price = Double(offeredPrice) else { return }
+        
+        isLoading = true
+        Task {
+            do {
+                try await NetworkManager.shared.createOffer(
+                    jobId: job.id,
+                    offeredPrice: price,
+                    message: message,
+                    estimatedTime: estimatedTime,
+                    token: token
+                )
+                alertTitle = "Başarılı"
+                alertMessage = "Teklifiniz başarıyla gönderildi!"
+                shouldDismissOnAlertClose = true
+                showAlert = true
+            } catch {
+                alertTitle = "Hata"
+                alertMessage = "Teklif gönderilemedi, tekrar deneyin."
+                shouldDismissOnAlertClose = false
+                showAlert = true
+            }
+            isLoading = false
+        }
+    }
+}
+
 // MARK: - My Offers Tab
 struct MyOffersView: View {
     let workerBlue: Color
@@ -140,22 +271,52 @@ struct MyOffersView: View {
 
     var body: some View {
         NavigationView {
-            Group {
+            ZStack {
                 if isLoading {
-                    ProgressView()
+                    VStack {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .padding()
+                        Text("Teklifler yükleniyor...")
+                            .foregroundColor(.secondary)
+                    }
+                } else if let error = errorMessage {
+                    VStack(spacing: 15) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .font(.headline)
+                        Button("Tekrar Dene") {
+                            Task { await fetchOffers() }
+                        }
+                        .padding()
+                        .background(workerBlue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                    }
                 } else if offers.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "doc.text.magnifyingglass")
-                            .font(.system(size: 50))
-                            .foregroundColor(.gray)
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray.opacity(0.3))
                         Text("Henüz teklif göndermediniz")
+                            .font(.title3)
+                            .fontWeight(.bold)
                             .foregroundColor(.secondary)
                     }
                 } else {
-                    List(offers) { offer in
-                        OfferCardView(offer: offer)
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(offers) { offer in
+                                OfferCardView(offer: offer)
+                            }
+                        }
+                        .padding()
                     }
-                    .listStyle(InsetGroupedListStyle())
+                    .refreshable {
+                        await fetchOffers()
+                    }
                 }
             }
             .navigationTitle("Tekliflerim")
@@ -302,28 +463,76 @@ struct OfferCardView: View {
     let offer: Offer
     
     var body: some View {
-        VStack(alignment: .leading) {
-            Text(offer.job?.title ?? "İş Başlığı Yüklenemedi")
-                .font(.headline)
-            Text("\(Int(offer.offeredPrice)) TL")
-                .foregroundColor(.blue)
-                .bold()
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Durum:")
-                Text(offer.status.rawValue.uppercased())
-                    .fontWeight(.semibold)
-                    .foregroundColor(statusColor(offer.status))
+                Text(offer.job?.title ?? "İş Başlığı")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Spacer()
+                statusBadge(offer.status)
             }
-            .font(.caption)
+            
+            Divider()
+            
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Teklif Fiyatı")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(Int(offer.offeredPrice)) TL")
+                        .font(.subheadline)
+                        .bold()
+                        .foregroundColor(.green)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Tahmini Süre")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(offer.estimatedTime ?? "Belirtilmedi")
+                        .font(.subheadline)
+                        .bold()
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Mesajınız")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(offer.message)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .italic()
+                    .lineLimit(2)
+            }
+            .padding(.top, 4)
         }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         .padding(.vertical, 4)
     }
     
-    private func statusColor(_ status: OfferStatus) -> Color {
+    @ViewBuilder
+    private func statusBadge(_ status: OfferStatus) -> some View {
+        let (text, color) = statusDetails(status)
+        Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.1))
+            .foregroundColor(color)
+            .cornerRadius(5)
+    }
+    
+    private func statusDetails(_ status: OfferStatus) -> (String, Color) {
         switch status {
-        case .pending: return .orange
-        case .accepted: return .green
-        case .rejected: return .red
+        case .pending: return ("BEKLEMEDE", .orange)
+        case .accepted: return ("KABUL EDİLDİ", .green)
+        case .rejected: return ("REDDEDİLDİ", .red)
         }
     }
 }

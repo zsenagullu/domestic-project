@@ -51,6 +51,30 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+# -- JOB SCHEMAS --
+class JobBase(BaseModel):
+    title: str
+    description: str
+    photo_url: Optional[str] = None
+    service_type: ServiceTypeEnum
+    location: Optional[str] = None
+    house_size: Optional[str] = None
+    price: Optional[float] = None
+
+class JobCreate(JobBase):
+    pass
+
+class JobUpdate(BaseModel):
+    status: JobStatusEnum
+
+class JobMinResponse(JobBase):
+    id: int
+    status: JobStatusEnum
+    user_id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
 # -- OFFER SCHEMAS --
 class OfferBase(BaseModel):
     offered_price: float = Field(..., gt=0, description="Teklif fiyatı (float > 0)")
@@ -69,24 +93,10 @@ class OfferResponse(OfferBase):
     job_id: int
     user_id: int
     created_at: datetime
+    job: Optional[JobMinResponse] = None
+    worker: Optional[UserResponse] = None
     class Config:
         from_attributes = True
-
-# -- JOB SCHEMAS --
-class JobBase(BaseModel):
-    title: str
-    description: str
-    photo_url: Optional[str] = None
-    service_type: ServiceTypeEnum
-    location: Optional[str] = None
-    house_size: Optional[str] = None
-    price: Optional[float] = None
-
-class JobCreate(JobBase):
-    pass
-
-class JobUpdate(BaseModel):
-    status: JobStatusEnum
 
 class JobResponse(JobBase):
     id: int
