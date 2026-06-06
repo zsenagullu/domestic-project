@@ -489,6 +489,10 @@ struct DirectBookingSheet: View {
     @State private var hasPet = false
     @State private var allergyInfo = ""
     @State private var budget = ""
+    @State private var cleaningType = "Genel Temizlik"
+    @State private var preferredDate = Date()
+    @State private var hasAllergies = false
+    @State private var specialNotes = ""
     @State private var isLoading = false
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -511,6 +515,23 @@ struct DirectBookingSheet: View {
                     Toggle("Evcil Hayvan Var mı?", isOn: $hasPet)
                     
                     TextField("Alerji Bilgisi (Opsiyonel)", text: $allergyInfo)
+                }
+                
+                Section(header: Text("Ek Detaylar")) {
+                    Picker("Temizlik Tipi", selection: $cleaningType) {
+                        Text("Genel Temizlik").tag("Genel Temizlik")
+                        Text("Derin Temizlik").tag("Derin Temizlik")
+                        Text("Cam Temizliği").tag("Cam Temizliği")
+                        Text("Halı Yıkama").tag("Halı Yıkama")
+                        Text("İnşaat Sonrası Temizlik").tag("İnşaat Sonrası Temizlik")
+                        Text("Ofis Temizliği").tag("Ofis Temizliği")
+                    }
+                    
+                    DatePicker("Tercih Edilen Tarih", selection: $preferredDate, displayedComponents: .date)
+                    
+                    Toggle("Alerjim Var (\(hasAllergies ? "Evet" : "Hayır"))", isOn: $hasAllergies)
+                    
+                    TextField("Özel Notlar (Opsiyonel)", text: $specialNotes)
                 }
                 
                 Section(header: Text("Bütçe")) {
@@ -560,9 +581,15 @@ struct DirectBookingSheet: View {
         
         isLoading = true
         let price = Double(budget)
-        let petStatus = hasPet ? "Var" : "Yok"
-        let allergyStr = allergyInfo.isEmpty ? "Yok" : allergyInfo
-        let combinedDescription = "Evcil hayvan: \(petStatus), Alerji: \(allergyStr)"
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = dateFormatter.string(from: preferredDate)
+        
+        let petsText = hasPet ? "Var" : "Yok"
+        let allergyText = hasAllergies ? "Evet" : "Hayır"
+        
+        let combinedDescription = "Hızlı Eşleşme Talebi (Alerji Detayı: \(allergyInfo)) | Temizlik: \(cleaningType) | Tarih: \(dateStr) | Evcil Hayvan: \(petsText) | Alerji: \(allergyText) | Not: \(specialNotes)"
         
         Task {
             do {

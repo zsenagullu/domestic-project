@@ -2,7 +2,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import FormFlowIntro from '../../components/FormFlowIntro';
 import PostJobIntro from '../../components/PostJobIntro';
-import FormSection from '../../components/FormSection';
+import DirectBookingModal from '../../components/DirectBookingModal';
 import Results from '../../components/Results';
 import PostJobModal from '../../components/PostJobModal';
 import { useState, useEffect } from 'react';
@@ -48,7 +48,7 @@ interface Job {
 export default function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState<'service' | 'offers'>('service');
   const [formDataSubmitted, setFormDataSubmitted] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showDirectBookingModal, setShowDirectBookingModal] = useState(false);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -189,11 +189,7 @@ export default function CustomerDashboard() {
   };
 
   const handleScrollToForm = () => {
-    setShowForm(true);
-    setTimeout(() => {
-      const element = document.getElementById("service-details");
-      element?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    setShowDirectBookingModal(true);
   };
 
   if (authLoading) return <div className="flex h-screen items-center justify-center">Yükleniyor...</div>;
@@ -355,7 +351,6 @@ export default function CustomerDashboard() {
                 </div>
               </section>
 
-              {showForm && <FormSection setFormDataSubmitted={setFormDataSubmitted} />}
               {formDataSubmitted && <Results />}
             </>
           )}
@@ -476,6 +471,11 @@ export default function CustomerDashboard() {
           isOpen={showPostJobModal} 
           onClose={() => setShowPostJobModal(false)} 
           initialData={aiInitialData}
+        />
+        <DirectBookingModal
+          isOpen={showDirectBookingModal}
+          onClose={() => setShowDirectBookingModal(false)}
+          onSuccess={() => setFormDataSubmitted(true)}
         />
       </main>
 
