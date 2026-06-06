@@ -17,6 +17,7 @@ services:
     env_file: .env
     environment:
       - ALGORITHM=HS256
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - db
 

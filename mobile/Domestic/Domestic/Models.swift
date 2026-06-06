@@ -102,3 +102,38 @@ struct Offer: Codable, Identifiable {
     }
 }
 
+// MARK: - AI Analysis Models
+struct AIAnalysisResponse: Codable {
+    let rawJson: String
+    
+    enum CodingKeys: String, CodingKey {
+        case rawJson = "raw_json"
+    }
+}
+
+struct AIAnalysisResult: Codable {
+    let location: String?
+    let houseSize: String?
+    let estimatedPrice: Double?
+    let description: String?
+    let serviceType: String?
+    let cleaningType: String?
+    let preferredDate: String?
+    let hasPets: Bool?
+    let hasAllergies: Bool?
+    let specialNotes: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case location
+        case houseSize = "house_size"
+        case estimatedPrice = "estimated_price"
+        case description
+        case serviceType = "service_type"
+        case cleaningType = "cleaning_type"
+        case preferredDate = "preferred_date"
+        case hasPets = "has_pets"
+        case hasAllergies = "has_allergies"
+        case specialNotes = "special_notes"
+    }
+}
+

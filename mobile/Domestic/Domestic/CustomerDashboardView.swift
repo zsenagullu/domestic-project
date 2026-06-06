@@ -1,4 +1,7 @@
 import SwiftUI
+import Speech
+import AVFoundation
+import Combine
 
 struct CustomerDashboardView: View {
     @AppStorage("token") var token: String?
@@ -8,6 +11,13 @@ struct CustomerDashboardView: View {
     @State private var showComingSoonAlert = false
     @State private var showCreateJobSheet = false
     @State private var showDirectBookingSheet = false
+    
+    // AI States
+    @State private var aiInput = ""
+    @State private var aiResult: AIAnalysisResult? = nil
+    @State private var isAnalyzing = false
+    @State private var aiInitialJobData: AIInitialJobData? = nil
+    @StateObject private var speechManager = SpeechRecognizerManager()
     
     // Offers states
     @State private var myJobs: [Job] = []
@@ -50,13 +60,41 @@ struct CustomerDashboardView: View {
                         action: { showDirectBookingSheet = true }
                     )
                     
+                    AICardView(
+                        aiInput: $aiInput,
+                        isAnalyzing: $isAnalyzing,
+                        aiResult: $aiResult,
+                        speechManager: speechManager,
+                        accentColor: Color(hex: "7C3AED"),
+                        onAnalyze: runAIAnalysis,
+                        onCreateJob: {
+                            let location = aiResult?.location ?? ""
+                            aiInitialJobData = AIInitialJobData(
+                                title: "\(location.isEmpty ? "Evin" : location) İçin Temizlik Talebi",
+                                description: aiResult?.description ?? aiInput,
+                                location: location,
+                                houseSize: aiResult?.houseSize ?? "medium",
+                                budget: aiResult?.estimatedPrice != nil ? String(Int(aiResult!.estimatedPrice!)) : "",
+                                cleaningType: aiResult?.cleaningType ?? "Genel Temizlik",
+                                preferredDate: aiResult?.preferredDate ?? "",
+                                hasPets: aiResult?.hasPets ?? false,
+                                hasAllergies: aiResult?.hasAllergies ?? false,
+                                specialNotes: aiResult?.specialNotes ?? ""
+                            )
+                            showCreateJobSheet = true
+                        }
+                    )
+                    
                     DashboardCard(
                         title: "Esnek ve Ekonomik Çözüm",
                         description: "İlan oluştur, teklifleri bekle",
                         buttonTitle: "İlan Oluştur",
                         icon: "megaphone.fill",
                         color: Color.black,
-                        action: { showCreateJobSheet = true }
+                        action: { 
+                            aiInitialJobData = nil
+                            showCreateJobSheet = true 
+                        }
                     )
                 }
                 .padding(.horizontal)
@@ -146,7 +184,23 @@ struct CustomerDashboardView: View {
             Text("Bu özellik yakında geliyor")
         }
         .sheet(isPresented: $showCreateJobSheet) {
-            CreateJobSheet(isPresented: $showCreateJobSheet)
+            if let data = aiInitialJobData {
+                CreateJobSheet(
+                    isPresented: $showCreateJobSheet,
+                    initialTitle: data.title,
+                    initialDescription: data.description,
+                    initialLocation: data.location,
+                    initialHouseSize: data.houseSize,
+                    initialBudget: data.budget,
+                    initialCleaningType: data.cleaningType,
+                    initialPreferredDate: data.preferredDate,
+                    initialHasPets: data.hasPets,
+                    initialHasAllergies: data.hasAllergies,
+                    initialSpecialNotes: data.specialNotes
+                )
+            } else {
+                CreateJobSheet(isPresented: $showCreateJobSheet)
+            }
         }
         .sheet(isPresented: $showDirectBookingSheet) {
             DirectBookingSheet(isPresented: $showDirectBookingSheet)
@@ -195,6 +249,27 @@ struct CustomerDashboardView: View {
             print("Error updating offer: \(error)")
         }
     }
+    
+    func runAIAnalysis() {
+        guard let tokenValue = token, !aiInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isAnalyzing = true
+        aiResult = nil
+        
+        Task {
+            do {
+                let result = try await NetworkManager.shared.analyzeVoiceCommand(text: aiInput, token: tokenValue)
+                await MainActor.run {
+                    self.aiResult = result
+                    self.isAnalyzing = false
+                }
+            } catch {
+                print("❌ AI analysis failed: \(error)")
+                await MainActor.run {
+                    self.isAnalyzing = false
+                }
+            }
+        }
+    }
 }
 
 struct CreateJobSheet: View {
@@ -206,10 +281,70 @@ struct CreateJobSheet: View {
     @State private var location = ""
     @State private var houseSize = "medium"
     @State private var budget = ""
+    @State private var cleaningType = "Genel Temizlik"
+    @State private var preferredDate = Date()
+    @State private var hasPets = false
+    @State private var hasAllergies = false
+    @State private var specialNotes = ""
     @State private var isLoading = false
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var isSuccess = false
+    
+    var initialTitle: String = ""
+    var initialDescription: String = ""
+    var initialLocation: String = ""
+    var initialHouseSize: String = "medium"
+    var initialBudget: String = ""
+    var initialCleaningType: String = "Genel Temizlik"
+    var initialPreferredDate: String = ""
+    var initialHasPets: Bool = false
+    var initialHasAllergies: Bool = false
+    var initialSpecialNotes: String = ""
+    
+    init(isPresented: Binding<Bool>, 
+         initialTitle: String = "", 
+         initialDescription: String = "", 
+         initialLocation: String = "", 
+         initialHouseSize: String = "medium", 
+         initialBudget: String = "",
+         initialCleaningType: String = "Genel Temizlik",
+         initialPreferredDate: String = "",
+         initialHasPets: Bool = false,
+         initialHasAllergies: Bool = false,
+         initialSpecialNotes: String = "") {
+        self._isPresented = isPresented
+        self.initialTitle = initialTitle
+        self.initialDescription = initialDescription
+        self.initialLocation = initialLocation
+        self.initialHouseSize = initialHouseSize
+        self.initialBudget = initialBudget
+        self.initialCleaningType = initialCleaningType
+        self.initialPreferredDate = initialPreferredDate
+        self.initialHasPets = initialHasPets
+        self.initialHasAllergies = initialHasAllergies
+        self.initialSpecialNotes = initialSpecialNotes
+        
+        self._title = State(initialValue: initialTitle)
+        self._description = State(initialValue: initialDescription)
+        self._location = State(initialValue: initialLocation)
+        self._houseSize = State(initialValue: initialHouseSize)
+        self._budget = State(initialValue: initialBudget)
+        self._cleaningType = State(initialValue: initialCleaningType)
+        
+        let parsedDate: Date
+        if !initialPreferredDate.isEmpty {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            parsedDate = formatter.date(from: initialPreferredDate) ?? Date()
+        } else {
+            parsedDate = Date()
+        }
+        self._preferredDate = State(initialValue: parsedDate)
+        self._hasPets = State(initialValue: initialHasPets)
+        self._hasAllergies = State(initialValue: initialHasAllergies)
+        self._specialNotes = State(initialValue: initialSpecialNotes)
+    }
     
     private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255)
     
@@ -243,6 +378,25 @@ struct CreateJobSheet: View {
                     
                     TextField("Tahmini Bütçe (TL, Opsiyonel)", text: $budget)
                         .keyboardType(.numberPad)
+                }
+                
+                Section(header: Text("Ek Detaylar")) {
+                    Picker("Temizlik Tipi", selection: $cleaningType) {
+                        Text("Genel Temizlik").tag("Genel Temizlik")
+                        Text("Derin Temizlik").tag("Derin Temizlik")
+                        Text("Cam Temizliği").tag("Cam Temizliği")
+                        Text("Halı Yıkama").tag("Halı Yıkama")
+                        Text("İnşaat Sonrası Temizlik").tag("İnşaat Sonrası Temizlik")
+                        Text("Ofis Temizliği").tag("Ofis Temizliği")
+                    }
+                    
+                    DatePicker("Tercih Edilen Tarih", selection: $preferredDate, displayedComponents: .date)
+                    
+                    Toggle("Evcil Hayvan (\(hasPets ? "Var" : "Yok"))", isOn: $hasPets)
+                    
+                    Toggle("Alerjim Var (\(hasAllergies ? "Evet" : "Hayır"))", isOn: $hasAllergies)
+                    
+                    TextField("Özel Notlar (Opsiyonel)", text: $specialNotes)
                 }
                 
                 Section {
@@ -288,11 +442,19 @@ struct CreateJobSheet: View {
         isLoading = true
         let price = Double(budget)
         
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = dateFormatter.string(from: preferredDate)
+        let petsText = hasPets ? "Var" : "Yok"
+        let allergiesText = hasAllergies ? "Evet" : "Hayır"
+        
+        let combinedDescription = "\(description) | Temizlik: \(cleaningType) | Tarih: \(dateStr) | Evcil Hayvan: \(petsText) | Alerji: \(allergiesText) | Not: \(specialNotes)"
+        
         Task {
             do {
                 _ = try await NetworkManager.shared.createJob(
                     title: title,
-                    description: description,
+                    description: combinedDescription,
                     location: location.isEmpty ? nil : location,
                     houseSize: houseSize,
                     price: price,
@@ -594,6 +756,288 @@ struct IncomingOfferCard: View {
         case .pending: return ("BEKLEMEDE", .orange)
         case .accepted: return ("KABUL EDİLDİ", .green)
         case .rejected: return ("REDDEDİLDİ", .red)
+        }
+    }
+}
+
+struct AIInitialJobData {
+    var title: String
+    var description: String
+    var location: String
+    var houseSize: String
+    var budget: String
+    var cleaningType: String
+    var preferredDate: String
+    var hasPets: Bool
+    var hasAllergies: Bool
+    var specialNotes: String
+}
+
+struct ResultItemView: View {
+    let title: String
+    let value: String
+    let icon: String
+    let accentColor: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.secondary)
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundColor(accentColor)
+                Text(value)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(10)
+    }
+}
+
+class SpeechRecognizerManager: ObservableObject {
+    private var audioEngine: AVAudioEngine?
+    private var speechRecognizer: SFSpeechRecognizer?
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    
+    @Published var isRecording = false
+    @Published var transcript = ""
+    @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+    
+    init() {
+        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "tr-TR"))
+    }
+    
+    func checkAuthorization() {
+        SFSpeechRecognizer.requestAuthorization { status in
+            DispatchQueue.main.async {
+                self.authorizationStatus = status
+            }
+        }
+    }
+    
+    func startRecording() {
+        SFSpeechRecognizer.requestAuthorization { authStatus in
+            DispatchQueue.main.async {
+                self.authorizationStatus = authStatus
+                guard authStatus == .authorized else {
+                    print("❌ Speech recognition not authorized")
+                    return
+                }
+                
+                do {
+                    try self.startSession()
+                } catch {
+                    print("❌ Audio Engine Error: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func startSession() throws {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        
+        audioEngine = AVAudioEngine()
+        request = SFSpeechAudioBufferRecognitionRequest()
+        
+        guard let request = request, let audioEngine = audioEngine else { return }
+        request.shouldReportPartialResults = true
+        
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        
+        let inputNode = audioEngine.inputNode
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            self.request?.append(buffer)
+        }
+        
+        audioEngine.prepare()
+        try audioEngine.start()
+        
+        isRecording = true
+        transcript = ""
+        
+        recognitionTask = speechRecognizer?.recognitionTask(with: request) { result, error in
+            if let result = result {
+                DispatchQueue.main.async {
+                    self.transcript = result.bestTranscription.formattedString
+                }
+            }
+            if error != nil || result?.isFinal == true {
+                self.stopRecording()
+            }
+        }
+    }
+    
+    func stopRecording() {
+        audioEngine?.stop()
+        request?.endAudio()
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        recognitionTask?.cancel()
+        
+        audioEngine = nil
+        request = nil
+        recognitionTask = nil
+        
+        DispatchQueue.main.async {
+            self.isRecording = false
+        }
+    }
+}
+
+struct AICardView: View {
+    @Binding var aiInput: String
+    @Binding var isAnalyzing: Bool
+    @Binding var aiResult: AIAnalysisResult?
+    @ObservedObject var speechManager: SpeechRecognizerManager
+    let accentColor: Color
+    let onAnalyze: () -> Void
+    let onCreateJob: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .font(.title2)
+                    .foregroundColor(accentColor)
+                Text("AI ile Hızlı Planla")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                Spacer()
+            }
+            
+            HStack(alignment: .top) {
+                ZStack(alignment: .topLeading) {
+                    if aiInput.isEmpty {
+                        Text("Talebinizi yazın...")
+                            .foregroundColor(.gray.opacity(0.5))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    TextEditor(text: $aiInput)
+                        .frame(height: 70)
+                        .padding(4)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(10)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                )
+                
+                Button(action: {
+                    if speechManager.isRecording {
+                        speechManager.stopRecording()
+                    } else {
+                        speechManager.startRecording()
+                    }
+                }) {
+                    Image(systemName: speechManager.isRecording ? "stop.fill" : "mic.fill")
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(speechManager.isRecording ? Color.red : accentColor)
+                        .clipShape(Circle())
+                }
+                .padding(.top, 4)
+            }
+            
+            Button(action: onAnalyze) {
+                HStack {
+                    if isAnalyzing {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    } else {
+                        Image(systemName: "sparkles")
+                        Text("AI ile Analiz Et")
+                    }
+                }
+                .font(.callout)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(aiInput.isEmpty || isAnalyzing ? Color.gray : accentColor)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .disabled(aiInput.isEmpty || isAnalyzing)
+            
+            if let result = aiResult {
+                VStack(alignment: .leading, spacing: 12) {
+                    Divider()
+                    
+                    Text("Analiz Sonucu")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(accentColor)
+                    
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ResultItemView(title: "Konum", value: result.location ?? "Belirtilmedi", icon: "mappin.circle.fill", accentColor: accentColor)
+                            ResultItemView(title: "Ev Büyüklüğü", value: translateHouseSize(result.houseSize), icon: "house.fill", accentColor: accentColor)
+                        }
+                        HStack(spacing: 8) {
+                            let priceVal = result.estimatedPrice != nil ? "\(Int(result.estimatedPrice!)) TL" : "Belirtilmedi"
+                            ResultItemView(title: "Tahmini Fiyat", value: priceVal, icon: "dollarsign.circle.fill", accentColor: .green)
+                            ResultItemView(title: "Hizmet Tipi", value: translateServiceType(result.serviceType), icon: "clock.fill", accentColor: accentColor)
+                        }
+                    }
+                    
+                    Button(action: onCreateJob) {
+                        HStack {
+                            Image(systemName: "doc.text.badge.plus")
+                            Text("Bu Bilgilerle İlan Oluştur")
+                        }
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.white)
+                        .foregroundColor(accentColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(accentColor, lineWidth: 1)
+                        )
+                    }
+                    .padding(.top, 5)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
+        .onChange(of: speechManager.transcript) { newValue in
+            if !newValue.isEmpty {
+                aiInput = newValue
+            }
+        }
+    }
+    
+    private func translateHouseSize(_ size: String?) -> String {
+        switch size {
+        case "small": return "Küçük"
+        case "medium": return "Orta"
+        case "large": return "Büyük"
+        default: return "Orta"
+        }
+    }
+    
+    private func translateServiceType(_ type: String?) -> String {
+        switch type {
+        case "MARKETPLACE_BIDDING": return "Teklif Usulü"
+        case "DIRECT_BOOKING": return "Hızlı Eşleşme"
+        default: return "Teklif Usulü"
         }
     }
 }
