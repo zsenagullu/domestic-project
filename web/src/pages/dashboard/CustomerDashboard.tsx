@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { axiosInstance } from '../../api/axiosInstance';
+import Toast from '../../components/Toast';
 import { 
   FileText, 
   User as UserIcon, 
@@ -17,7 +18,10 @@ import {
   Check, 
   X, 
   Loader2,
-  Briefcase
+  Briefcase,
+  Sparkles,
+  MapPin,
+  Mic
 } from 'lucide-react';
 
 interface User {
@@ -47,6 +51,64 @@ export default function CustomerDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // AI Analysis state
+  const [aiInput, setAiInput] = useState('');
+  const [aiResult, setAiResult] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiInitialData, setAiInitialData] = useState<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [recognitionInstance, setRecognitionInstance] = useState<any>(null);
+
+  const toggleSpeechRecognition = () => {
+    if (isListening) {
+      if (recognitionInstance) {
+        recognitionInstance.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn('Speech Recognition API is not supported in this browser.');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'tr-TR';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setAiInput((prev) => prev ? `${prev} ${transcript}` : transcript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+      setRecognitionInstance(recognition);
+    } catch (error) {
+      console.error('Speech recognition failed to start:', error);
+      setIsListening(false);
+    }
+  };
 
   // Offers state
   const [myJobs, setMyJobs] = useState<Job[]>([]);
@@ -58,6 +120,42 @@ export default function CustomerDashboard() {
       fetchMyJobsAndOffers();
     }
   }, [activeTab]);
+
+  const handleAIAnalysis = async () => {
+    if (!aiInput.trim()) return;
+    
+    setIsAnalyzing(true);
+    setAiResult(null);
+    try {
+      const response = await axiosInstance.post('/ai/analyze-voice', { text: aiInput });
+      const data = response.data;
+      const result = JSON.parse(data.raw_json);
+      setAiResult(result);
+    } catch (err) {
+      console.error('AI Analysis error:', err);
+      setToast({ message: 'Analiz yapılamadı. Lütfen tekrar deneyiniz.', type: 'error' });
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handlePostAIJob = () => {
+    if (!aiResult) return;
+    
+    setAiInitialData({
+      title: `${aiResult.location || 'Evin'} İçin Temizlik Talebi`,
+      description: aiResult.description || aiInput,
+      location: aiResult.location,
+      house_size: aiResult.house_size,
+      price: aiResult.estimated_price,
+      cleaning_type: aiResult.cleaning_type,
+      preferred_date: aiResult.preferred_date,
+      has_pets: aiResult.has_pets,
+      has_allergies: aiResult.has_allergies,
+      special_notes: aiResult.special_notes
+    });
+    setShowPostJobModal(true);
+  };
 
   const fetchMyJobsAndOffers = async () => {
     setIsJobsLoading(true);
@@ -78,11 +176,15 @@ export default function CustomerDashboard() {
   const handleOfferAction = async (offerId: number, status: 'accepted' | 'rejected') => {
     try {
       await axiosInstance.patch(`/offers/${offerId}/status`, { status });
+      setToast({ 
+        message: status === 'accepted' ? 'Teklif kabul edildi!' : 'Teklif reddedildi!', 
+        type: 'success' 
+      });
       // Refresh list
       fetchMyJobsAndOffers();
     } catch (err) {
       console.error(`Error updating offer status to ${status}:`, err);
-      alert('İşlem başarısız oldu. Lütfen tekrar deneyin.');
+      setToast({ message: 'İşlem başarısız oldu. Lütfen tekrar deneyin.', type: 'error' });
     }
   };
 
@@ -145,10 +247,111 @@ export default function CustomerDashboard() {
 
           {activeTab === 'service' && (
             <>
+              {/* AI Analysis Section */}
+              <div className="bg-white rounded-[2.5rem] p-8 shadow-sm border border-gray-100 mb-12 overflow-hidden relative group">
+                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Sparkles size={120} className="text-[#1E3A8A]" />
+                </div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600">
+                      <Sparkles size={20} />
+                    </div>
+                    <h2 className="text-xl font-black text-gray-900">AI ile Hızlı Planla</h2>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-grow">
+                      <textarea
+                        value={aiInput}
+                        onChange={(e) => setAiInput(e.target.value)}
+                        placeholder="Örn: Ankara Çankaya'da 3 odalı evim var, bu hafta sonu temizlenmesi lazım, bütçem 500 TL"
+                        className="w-full h-32 px-6 py-4 bg-gray-50 border-2 border-transparent focus:border-purple-200 focus:bg-white rounded-3xl outline-none transition-all font-medium resize-none text-gray-700 placeholder:text-gray-400"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <div className="flex flex-row gap-3 justify-end items-end">
+                        <button
+                          onClick={handleAIAnalysis}
+                          disabled={isAnalyzing || !aiInput.trim()}
+                          className="flex-grow md:flex-grow-0 whitespace-nowrap px-8 py-4 bg-gradient-to-r from-purple-600 to-[#1E3A8A] text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-100 hover:shadow-purple-200 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isAnalyzing ? (
+                            <>
+                              <Loader2 size={20} className="animate-spin" />
+                              Analiz ediliyor...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles size={20} />
+                              AI ile Analiz Et
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={toggleSpeechRecognition}
+                          className={`p-4 rounded-2xl font-bold flex items-center justify-center transition-all hover:scale-[1.02] active:scale-95 shadow-md ${
+                            isListening
+                              ? 'bg-red-500 text-white animate-pulse shadow-red-200 hover:bg-red-600'
+                              : 'bg-purple-100 text-purple-600 hover:bg-purple-200 shadow-purple-100'
+                          }`}
+                          title="Sesle Konuş"
+                        >
+                          <Mic size={20} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {aiResult && (
+                    <div className="mt-8 bg-purple-50/50 border border-purple-100 rounded-[2rem] p-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                      <h3 className="text-sm font-bold text-purple-600 uppercase tracking-widest mb-4">Analiz Sonucu</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Konum</span>
+                          <p className="font-bold text-gray-900 flex items-center gap-1">
+                            <MapPin size={14} className="text-purple-500" /> {aiResult.location || 'Belirtilmedi'}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Ev Büyüklüğü</span>
+                          <p className="font-bold text-gray-900 flex items-center gap-1 text-sm">
+                            {aiResult.house_size === 'small' ? 'Küçük' : aiResult.house_size === 'large' ? 'Büyük' : 'Orta'}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Tahmini Fiyat</span>
+                          <p className="font-bold text-green-600">{aiResult.estimated_price} TL</p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase">Hizmet Tipi</span>
+                          <p className="font-bold text-purple-600 text-xs">
+                            {aiResult.service_type === 'DIRECT_BOOKING' ? 'Hızlı Eşleşme' : 'Teklif Usulü'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-6 pt-6 border-t border-purple-100 flex justify-end">
+                        <button
+                          onClick={handlePostAIJob}
+                          className="bg-white text-purple-600 border-2 border-purple-200 px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-600 hover:text-white hover:border-purple-600 transition-all flex items-center gap-2"
+                        >
+                          <Briefcase size={16} /> Bu Bilgilerle İlan Oluştur
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <section className="relative z-20 w-full mb-20">
                 <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
                   <FormFlowIntro onToggleForm={handleScrollToForm} />
-                  <PostJobIntro onPostJob={() => setShowPostJobModal(true)} />
+                  <PostJobIntro onPostJob={() => {
+                    setAiInitialData(null); // Clear AI data if manually opening
+                    setShowPostJobModal(true);
+                  }} />
                 </div>
               </section>
 
@@ -272,10 +475,18 @@ export default function CustomerDashboard() {
         <PostJobModal 
           isOpen={showPostJobModal} 
           onClose={() => setShowPostJobModal(false)} 
+          initialData={aiInitialData}
         />
       </main>
 
       <Footer />
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 }

@@ -1,21 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Briefcase, MapPin, Home, DollarSign, Loader2 } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
+import Toast from './Toast';
 
 interface PostJobModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialData?: {
+    title?: string;
+    description?: string;
+    location?: string;
+    house_size?: string;
+    price?: string | number;
+    cleaning_type?: string;
+    preferred_date?: string;
+    has_pets?: boolean;
+    has_allergies?: boolean;
+    special_notes?: string;
+  };
 }
 
-export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
+export default function PostJobModal({ isOpen, onClose, initialData }: PostJobModalProps) {
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    location: '',
-    house_size: 'medium',
-    price: ''
+    title: initialData?.title || '',
+    description: initialData?.description || '',
+    location: initialData?.location || '',
+    house_size: initialData?.house_size || 'medium',
+    price: initialData?.price?.toString() || '',
+    cleaning_type: initialData?.cleaning_type || 'Genel Temizlik',
+    preferred_date: initialData?.preferred_date || '',
+    has_pets: initialData?.has_pets || false,
+    has_allergies: initialData?.has_allergies || false,
+    special_notes: initialData?.special_notes || ''
   });
+
+  // Update form if initialData changes (e.g. from AI)
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        title: initialData.title || '',
+        description: initialData.description || '',
+        location: initialData.location || '',
+        house_size: initialData.house_size || 'medium',
+        price: initialData.price?.toString() || '',
+        cleaning_type: initialData.cleaning_type || 'Genel Temizlik',
+        preferred_date: initialData.preferred_date || '',
+        has_pets: initialData.has_pets || false,
+        has_allergies: initialData.has_allergies || false,
+        special_notes: initialData.special_notes || ''
+      });
+    }
+  }, [initialData]);
 
   if (!isOpen) return null;
 
@@ -30,12 +67,14 @@ export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
         service_type: "MARKETPLACE_BIDDING"
       });
       
-      alert('İlanınız oluşturuldu!');
-      onClose();
+      setToast({ message: 'İlanınız oluşturuldu!', type: 'success' });
+      setTimeout(() => {
+        onClose();
+      }, 1500);
       // Optionally refresh list or redirect
     } catch (error) {
       console.error('Job creation error:', error);
-      alert('İlan oluşturulurken bir hata oluştu.');
+      setToast({ message: 'İlan oluşturulurken bir hata oluştu.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -52,7 +91,7 @@ export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
       {/* Modal Content */}
       <div className="relative bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
         <div className="p-8">
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-domestic-red/10 rounded-2xl flex items-center justify-center text-domestic-red">
                 <Briefcase size={24} />
@@ -70,27 +109,27 @@ export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5 max-h-[65vh] overflow-y-auto pr-2 scrollbar-thin">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2 px-1">İlan Başlığı</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">İlan Başlığı</label>
                 <input
                   required
                   type="text"
                   placeholder="Örn: 3+1 Ev Temizliği"
-                  className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium"
+                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2 px-1">Açıklama</label>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">Açıklama</label>
                 <textarea
                   required
-                  rows={3}
+                  rows={2.5}
                   placeholder="İhtiyaçlarını detaylıca buraya yazabilirsin..."
-                  className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium resize-none"
+                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium resize-none text-sm"
                   value={formData.description}
                   onChange={(e) => setFormData({...formData, description: e.target.value})}
                 />
@@ -98,24 +137,24 @@ export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 px-1 flex items-center gap-1">
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
                     <MapPin size={14} /> Konum
                   </label>
                   <input
                     required
                     type="text"
                     placeholder="İstanbul, Beşiktaş"
-                    className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
+                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
                     value={formData.location}
                     onChange={(e) => setFormData({...formData, location: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 px-1 flex items-center gap-1">
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
                     <Home size={14} /> Ev Büyüklüğü
                   </label>
                   <select
-                    className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
+                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
                     value={formData.house_size}
                     onChange={(e) => setFormData({...formData, house_size: e.target.value})}
                   >
@@ -126,16 +165,96 @@ export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">Temizlik Tipi</label>
+                  <select
+                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
+                    value={formData.cleaning_type}
+                    onChange={(e) => setFormData({...formData, cleaning_type: e.target.value})}
+                  >
+                    <option value="Genel Temizlik">Genel Temizlik</option>
+                    <option value="Derin Temizlik">Derin Temizlik</option>
+                    <option value="Cam Temizliği">Cam Temizliği</option>
+                    <option value="Halı Yıkama">Halı Yıkama</option>
+                    <option value="İnşaat Sonrası Temizlik">İnşaat Sonrası Temizlik</option>
+                    <option value="Ofis Temizliği">Ofis Temizliği</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">Tercih Edilen Tarih</label>
+                  <input
+                    type="date"
+                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
+                    value={formData.preferred_date}
+                    onChange={(e) => setFormData({...formData, preferred_date: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">Evcil Hayvan</label>
+                  <div className="flex bg-gray-50 p-1 rounded-2xl border-2 border-transparent">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, has_pets: false})}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${!formData.has_pets ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Yok
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, has_pets: true})}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${formData.has_pets ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Var
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">Alerjim Var</label>
+                  <div className="flex bg-gray-50 p-1 rounded-2xl border-2 border-transparent">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, has_allergies: false})}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${!formData.has_allergies ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Hayır
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({...formData, has_allergies: true})}
+                      className={`flex-1 py-1.5 text-xs font-bold rounded-xl transition-all ${formData.has_allergies ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      Evet
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2 px-1 flex items-center gap-1">
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
                   <DollarSign size={14} /> Tahmini Bütçe (TL - Opsiyonel)
                 </label>
                 <input
                   type="number"
                   placeholder="Örn: 1500"
-                  className="w-full px-5 py-4 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium shadow-sm"
+                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm shadow-sm"
                   value={formData.price}
                   onChange={(e) => setFormData({...formData, price: e.target.value})}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1">Özel Notlar (Opsiyonel)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Çalışana iletmek istediğin ekstra bir detay varsa yazabilirsin..."
+                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium resize-none text-sm"
+                  value={formData.special_notes}
+                  onChange={(e) => setFormData({...formData, special_notes: e.target.value})}
                 />
               </div>
             </div>
@@ -143,13 +262,20 @@ export default function PostJobModal({ isOpen, onClose }: PostJobModalProps) {
             <button
               disabled={loading}
               type="submit"
-              className="w-full bg-domestic-red text-white py-5 rounded-[1.5rem] font-black text-lg hover:bg-domestic-dark-red transition-all shadow-lg hover:shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4 active:scale-95"
+              className="w-full bg-domestic-red text-white py-4 rounded-[1.5rem] font-black text-lg hover:bg-domestic-dark-red transition-all shadow-lg hover:shadow-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-4 active:scale-95"
             >
               {loading ? <Loader2 className="animate-spin" /> : 'İlanı Yayınla'}
             </button>
           </form>
         </div>
       </div>
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
     </div>
   );
 }

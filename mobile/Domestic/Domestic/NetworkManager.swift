@@ -173,4 +173,36 @@ class NetworkManager {
             print("❌ Connection Test Error: \(error.localizedDescription)")
         }
     }
+    
+    func analyzeVoiceCommand(text: String, token: String) async throws -> AIAnalysisResult {
+        guard let url = URL(string: "\(baseURL)/ai/analyze-voice") else {
+            throw URLError(.badURL)
+        }
+        
+        let requestData = ["text": text]
+        guard let body = try? JSONSerialization.data(withJSONObject: requestData) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let wrapper = try JSONDecoder().decode(AIAnalysisResponse.self, from: data)
+        guard let rawJsonData = wrapper.rawJson.data(using: .utf8) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        let result = try JSONDecoder().decode(AIAnalysisResult.self, from: rawJsonData)
+        return result
+    }
 }
+

@@ -62,6 +62,11 @@ class Job(Base):
     location = Column(String, nullable=True)
     house_size = Column(String, nullable=True)
     price = Column(Float, nullable=True)
+    cleaning_type = Column(String, nullable=True)
+    preferred_date = Column(String, nullable=True)
+    has_pets = Column(Boolean, default=False)
+    has_allergies = Column(Boolean, default=False)
+    special_notes = Column(Text, nullable=True)
     
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)

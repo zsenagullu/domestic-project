@@ -60,6 +60,11 @@ class JobBase(BaseModel):
     location: Optional[str] = None
     house_size: Optional[str] = None
     price: Optional[float] = None
+    cleaning_type: Optional[str] = None
+    preferred_date: Optional[str] = None
+    has_pets: Optional[bool] = False
+    has_allergies: Optional[bool] = False
+    special_notes: Optional[str] = None
 
 class JobCreate(JobBase):
     pass
