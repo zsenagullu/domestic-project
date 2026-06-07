@@ -72,6 +72,13 @@ class JobCreate(JobBase):
 class JobUpdate(BaseModel):
     status: JobStatusEnum
 
+class JobUpdateFull(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    house_size: Optional[str] = None
+    price: Optional[float] = None
+
 class JobMinResponse(JobBase):
     id: int
     status: JobStatusEnum

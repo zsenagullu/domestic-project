@@ -3,6 +3,7 @@ import Footer from '../../components/Footer';
 import FormFlowIntro from '../../components/FormFlowIntro';
 import PostJobIntro from '../../components/PostJobIntro';
 import DirectBookingModal from '../../components/DirectBookingModal';
+import EditJobModal from '../../components/EditJobModal';
 import Results from '../../components/Results';
 import PostJobModal from '../../components/PostJobModal';
 import { useState, useEffect } from 'react';
@@ -41,8 +42,13 @@ interface Offer {
 interface Job {
   id: number;
   title: string;
+  description: string;
   user_id: number;
   offers: Offer[];
+  location?: string;
+  house_size?: string;
+  price?: number;
+  status: string;
 }
 
 export default function CustomerDashboard() {
@@ -50,6 +56,8 @@ export default function CustomerDashboard() {
   const [formDataSubmitted, setFormDataSubmitted] = useState(false);
   const [showDirectBookingModal, setShowDirectBookingModal] = useState(false);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
+  const [selectedJobForEdit, setSelectedJobForEdit] = useState<Job | null>(null);
+  const [showEditJobModal, setShowEditJobModal] = useState(false);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -190,6 +198,11 @@ export default function CustomerDashboard() {
 
   const handleScrollToForm = () => {
     setShowDirectBookingModal(true);
+  };
+
+  const handleEditJobClick = (job: Job) => {
+    setSelectedJobForEdit(job);
+    setShowEditJobModal(true);
   };
 
   if (authLoading) return <div className="flex h-screen items-center justify-center">Yükleniyor...</div>;
@@ -389,14 +402,32 @@ export default function CustomerDashboard() {
                 <div className="space-y-12">
                   {myJobs.map(job => (
                     <div key={job.id} className="border-b border-gray-100 pb-8 last:border-0">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="bg-blue-50 p-2 rounded-lg text-[#1E3A8A]">
-                          <Briefcase size={20} />
+                      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="bg-blue-50 p-2 rounded-lg text-[#1E3A8A]">
+                            <Briefcase size={20} />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900">{job.title}</h3>
+                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-md font-bold">
+                            {job.offers.length} Teklif
+                          </span>
+                          <span className={`text-xs px-2 py-1 rounded-md font-bold ${
+                            job.status === 'open' ? 'bg-green-100 text-green-700' :
+                            job.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            job.status === 'completed' ? 'bg-gray-100 text-gray-600' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {job.status === 'open' ? 'Açık' :
+                             job.status === 'in_progress' ? 'Devam Ediyor' :
+                             job.status === 'completed' ? 'Tamamlandı' : 'İptal Edildi'}
+                          </span>
                         </div>
-                        <h3 className="text-xl font-bold text-gray-900">{job.title}</h3>
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-md font-bold">
-                          {job.offers.length} Teklif
-                        </span>
+                        <button
+                          onClick={() => handleEditJobClick(job)}
+                          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-all"
+                        >
+                          İlanı Düzenle
+                        </button>
                       </div>
 
                       {job.offers.length === 0 ? (
@@ -476,6 +507,15 @@ export default function CustomerDashboard() {
           isOpen={showDirectBookingModal}
           onClose={() => setShowDirectBookingModal(false)}
           onSuccess={() => setFormDataSubmitted(true)}
+        />
+        <EditJobModal
+          isOpen={showEditJobModal}
+          onClose={() => {
+            setShowEditJobModal(false);
+            setSelectedJobForEdit(null);
+          }}
+          onSuccess={fetchMyJobsAndOffers}
+          job={selectedJobForEdit}
         />
       </main>
 
