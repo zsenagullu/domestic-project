@@ -60,3 +60,24 @@ def update_job_status(job_id: int, status: schemas.JobUpdate, db: Session = Depe
     db.commit()
     db.refresh(job)
     return job
+
+@router.patch("/{job_id}", response_model=schemas.JobResponse)
+def update_job(
+    job_id: int,
+    job_update: schemas.JobUpdateFull,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this job")
+        
+    update_data = job_update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(job, key, value)
+        
+    db.commit()
+    db.refresh(job)
+    return job
