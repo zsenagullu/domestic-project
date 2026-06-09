@@ -32,6 +32,8 @@ class UserBase(BaseModel):
     has_criminal_record: Optional[bool] = False
     gender: Optional[str] = None
     location: Optional[str] = None
+    photo_url: Optional[str] = None
+    bio: Optional[str] = None
     
     # Personel rolleri için özellikler
     hourly_rate: Optional[float] = Field(default=None, ge=0.0, description="Saatlik ücret (float >= 0)")
@@ -48,6 +50,28 @@ class UserLogin(BaseModel):
 class UserResponse(UserBase):
     id: int
     created_at: datetime
+    class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    location: Optional[str] = None
+    hourly_rate: Optional[float] = Field(default=None, ge=0.0, description="Saatlik ücret (float >= 0)")
+    skills: Optional[List[str]] = Field(default=None, description="Yetkinlikler listesi")
+    bio: Optional[str] = None
+
+class UserPhotoUpload(BaseModel):
+    photo: str
+
+class WorkerMatchResponse(BaseModel):
+    id: int
+    name: str
+    location: Optional[str] = None
+    hourly_rate: Optional[float] = None
+    rating: Optional[float] = None
+    skills: Optional[List[str]] = None
+    photo_url: Optional[str] = None
+    bio: Optional[str] = None
+    
     class Config:
         from_attributes = True
 
@@ -126,3 +150,23 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+class DirectRequestCreate(BaseModel):
+    worker_id: int
+    job_id: int
+
+class DirectRequestStatusUpdate(BaseModel):
+    status: str
+
+class DirectRequestResponse(BaseModel):
+    id: int
+    customer_id: int
+    worker_id: int
+    job_id: int
+    status: str
+    created_at: datetime
+    customer: Optional[UserResponse] = None
+    job: Optional[JobMinResponse] = None
+    
+    class Config:
+        from_attributes = True

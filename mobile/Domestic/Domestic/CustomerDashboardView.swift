@@ -24,6 +24,13 @@ struct CustomerDashboardView: View {
     @State private var isLoadingOffers = false
     @State private var offersErrorMessage: String?
     
+    // Matching states
+    @State private var showMatchesSheet = false
+    @State private var matchedWorkers: [WorkerMatch] = []
+    @State private var isFetchingMatches = false
+    @State private var matchesError: String? = nil
+    @State private var lastCreatedJobId: Int? = nil
+    
     // Domestic Red Palette
     private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255) // #E63946
 
@@ -203,7 +210,47 @@ struct CustomerDashboardView: View {
             }
         }
         .sheet(isPresented: $showDirectBookingSheet) {
-            DirectBookingSheet(isPresented: $showDirectBookingSheet)
+            DirectBookingSheet(isPresented: $showDirectBookingSheet) { location, houseSize, jobId in
+                self.lastCreatedJobId = jobId
+                self.fetchMatches(location: location, houseSize: houseSize)
+            }
+        }
+        .sheet(isPresented: $showMatchesSheet) {
+            WorkerMatchesSheet(
+                isPresented: $showMatchesSheet,
+                workers: matchedWorkers,
+                isLoading: isFetchingMatches,
+                errorMessage: matchesError,
+                jobId: lastCreatedJobId ?? 0
+            )
+        }
+    }
+    
+    func fetchMatches(location: String, houseSize: String) {
+        guard let tokenValue = token else { return }
+        
+        isFetchingMatches = true
+        matchesError = nil
+        matchedWorkers = []
+        showMatchesSheet = true
+        
+        Task {
+            do {
+                let matches = try await NetworkManager.shared.fetchWorkerMatches(
+                    location: location,
+                    houseSize: houseSize,
+                    token: tokenValue
+                )
+                await MainActor.run {
+                    self.matchedWorkers = matches
+                    self.isFetchingMatches = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.matchesError = "Uzmanlar yüklenirken bir hata oluştu."
+                    self.isFetchingMatches = false
+                }
+            }
         }
     }
     
@@ -482,9 +529,15 @@ struct CreateJobSheet: View {
 
 struct DirectBookingSheet: View {
     @Binding var isPresented: Bool
-    @AppStorage("token") var token: String?
+    var onSuccess: (String, String, Int) -> Void
     
-    @State private var location = ""
+    @AppStorage("token") var token: String?
+    @State private var createdJobId: Int? = nil
+    
+    @StateObject private var locationService = LocationService()
+    
+    @State private var selectedCity = "İstanbul"
+    @State private var selectedDistrict = "Kadıköy"
     @State private var houseSize = "medium"
     @State private var hasPet = false
     @State private var allergyInfo = ""
@@ -498,13 +551,86 @@ struct DirectBookingSheet: View {
     @State private var alertMessage = ""
     @State private var isSuccess = false
     
+    // Search sheet triggers
+    @State private var showCitySearchSheet = false
+    @State private var showDistrictSearchSheet = false
+    
     private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255)
+    
+    private let turkeyCities: [String: [String]] = [
+        "Adana": ["Seyhan", "Çukurova", "Yüreğir", "Sarıçam"],
+        "Ankara": ["Çankaya", "Keçiören", "Mamak", "Yenimahalle", "Altındağ", "Etimesgut", "Sincan", "Pursaklar"],
+        "Antalya": ["Muratpaşa", "Kepez", "Konyaaltı", "Alanya", "Manavgat"],
+        "Bursa": ["Osmangazi", "Nilüfer", "Yıldırım", "İnegöl", "Gemlik"],
+        "Gaziantep": ["Şahinbey", "Şehitkamil", "Nizip"],
+        "İstanbul": ["Kadıköy", "Beşiktaş", "Şişli", "Fatih", "Üsküdar", "Bakırköy", "Beyoğlu", "Sarıyer"],
+        "İzmir": ["Bornova", "Buca", "Konak", "Karşıyaka", "Çiğli", "Gaziemir", "Menemen"],
+        "Kocaeli": ["İzmit", "Gebze", "Darıca", "Körfez", "Gölcük"],
+        "Konya": ["Selçuklu", "Meram", "Karatay", "Ereğli"],
+        "Şanlıurfa": ["Haliliye", "Eyyübiye", "Karaköprü", "Siverek"]
+    ]
+    
+    private var cityItems: [String] {
+        if locationService.provinces.isEmpty {
+            return turkeyCities.keys.sorted()
+        } else {
+            return locationService.provinces.map { $0.name }
+        }
+    }
+    
+    private var districtItems: [String] {
+        if locationService.provinces.isEmpty {
+            return turkeyCities[selectedCity] ?? []
+        } else {
+            return locationService.districts.map { $0.name }
+        }
+    }
     
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Hızlı Eşleşme Formu")) {
-                    TextField("Konum (İlçe/Semt)", text: $location)
+                    HStack {
+                        Text("Şehir")
+                        Spacer()
+                        if locationService.isLoading && locationService.provinces.isEmpty {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: domesticRed))
+                        } else {
+                            Text(selectedCity)
+                                .foregroundColor(.gray)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.gray.opacity(0.5))
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if !(locationService.isLoading && locationService.provinces.isEmpty) {
+                            showCitySearchSheet = true
+                        }
+                    }
+                    
+                    HStack {
+                        Text("İlçe")
+                        Spacer()
+                        if selectedDistrict == "Seçiniz..." {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: domesticRed))
+                        } else {
+                            Text(selectedDistrict)
+                                .foregroundColor(.gray)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.gray.opacity(0.5))
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        if selectedDistrict != "Seçiniz..." {
+                            showDistrictSearchSheet = true
+                        }
+                    }
                     
                     Picker("Ev Büyüklüğü", selection: $houseSize) {
                         Text("Küçük").tag("small")
@@ -552,10 +678,10 @@ struct DirectBookingSheet: View {
                         }
                     }
                     .padding(.vertical, 8)
-                    .background(location.isEmpty || isLoading ? Color.gray : domesticRed)
+                    .background(isLoading ? Color.gray : domesticRed)
                     .foregroundColor(.white)
                     .cornerRadius(10)
-                    .disabled(location.isEmpty || isLoading)
+                    .disabled(isLoading)
                 }
             }
             .navigationTitle("Hızlı Eşleşme")
@@ -564,10 +690,51 @@ struct DirectBookingSheet: View {
                 Button("Tamam") {
                     if isSuccess {
                         isPresented = false
+                        onSuccess("\(selectedCity), \(selectedDistrict)", houseSize, createdJobId ?? 0)
                     }
                 }
             } message: {
                 Text(alertMessage)
+            }
+            .sheet(isPresented: $showCitySearchSheet) {
+                SearchableItemSelectionSheet(
+                    title: "Şehir Seçiniz",
+                    placeholder: "Şehir ara...",
+                    items: cityItems,
+                    selectedItem: $selectedCity
+                ) { newCity in
+                    if !locationService.provinces.isEmpty {
+                        if let province = locationService.provinces.first(where: { $0.name == newCity }) {
+                            selectedDistrict = "Seçiniz..."
+                            locationService.fetchDistricts(provinceId: province.id)
+                        }
+                    } else {
+                        if let districts = turkeyCities[newCity], let firstDistrict = districts.first {
+                            selectedDistrict = firstDistrict
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showDistrictSearchSheet) {
+                SearchableItemSelectionSheet(
+                    title: "İlçe Seçiniz",
+                    placeholder: "İlçe ara...",
+                    items: districtItems,
+                    selectedItem: $selectedDistrict
+                )
+            }
+            .onAppear {
+                locationService.fetchProvinces()
+            }
+            .onChange(of: locationService.provinces) { newProvinces in
+                if let province = newProvinces.first(where: { $0.name == selectedCity }) {
+                    locationService.fetchDistricts(provinceId: province.id)
+                }
+            }
+            .onChange(of: locationService.districts) { newDistricts in
+                if selectedDistrict == "Seçiniz...", let first = newDistricts.first {
+                    selectedDistrict = first.name
+                }
             }
         }
     }
@@ -589,14 +756,15 @@ struct DirectBookingSheet: View {
         let petsText = hasPet ? "Var" : "Yok"
         let allergyText = hasAllergies ? "Evet" : "Hayır"
         
+        let locationStr = "\(selectedCity), \(selectedDistrict)"
         let combinedDescription = "Hızlı Eşleşme Talebi (Alerji Detayı: \(allergyInfo)) | Temizlik: \(cleaningType) | Tarih: \(dateStr) | Evcil Hayvan: \(petsText) | Alerji: \(allergyText) | Not: \(specialNotes)"
         
         Task {
             do {
-                _ = try await NetworkManager.shared.createJob(
+                let job = try await NetworkManager.shared.createJob(
                     title: "Hızlı Eşleşme Talebi",
                     description: combinedDescription,
-                    location: location,
+                    location: locationStr,
                     houseSize: houseSize,
                     price: price,
                     serviceType: "DIRECT_BOOKING",
@@ -604,6 +772,7 @@ struct DirectBookingSheet: View {
                 )
                 
                 await MainActor.run {
+                    self.createdJobId = job.id
                     isSuccess = true
                     alertMessage = "Talebiniz alındı! En uygun uzmanlar listeleniyor..."
                     showAlert = true
@@ -1065,6 +1234,357 @@ struct AICardView: View {
         case "MARKETPLACE_BIDDING": return "Teklif Usulü"
         case "DIRECT_BOOKING": return "Hızlı Eşleşme"
         default: return "Teklif Usulü"
+        }
+    }
+}
+
+// MARK: - Matching Sheets & Views
+struct WorkerMatchesSheet: View {
+    @Binding var isPresented: Bool
+    let workers: [WorkerMatch]
+    let isLoading: Bool
+    let errorMessage: String?
+    let jobId: Int
+    
+    @AppStorage("token") var token: String?
+    
+    @State private var showAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    @State private var isSendingRequest = false
+    
+    private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255)
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                if isLoading {
+                    VStack(spacing: 15) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: domesticRed))
+                            .scaleEffect(1.5)
+                        Text("En uygun uzmanlar aranıyor...")
+                            .foregroundColor(.secondary)
+                            .font(.subheadline)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else if let error = errorMessage {
+                    VStack(spacing: 15) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.largeTitle)
+                            .foregroundColor(.red)
+                        Text(error)
+                            .foregroundColor(.secondary)
+                            .font(.subheadline)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else if workers.isEmpty {
+                    VStack(spacing: 15) {
+                        Image(systemName: "person.crop.circle.badge.exclamationmark")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        Text("Uygun uzman bulunamadı")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                        Text("Lütfen konum veya ev büyüklüğü tercihinizi değiştirip tekrar deneyin.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    }
+                    .frame(maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(workers) { worker in
+                                WorkerMatchCard(worker: worker, accentColor: domesticRed) {
+                                    sendDirectRequest(to: worker)
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle("Kriterinize Uygun Uzmanlar")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(leading: Button(action: { isPresented = false }) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.left")
+                    Text("Geri Dön")
+                }
+                .foregroundColor(domesticRed)
+                .bold()
+            })
+            .alert(alertTitle, isPresented: $showAlert) {
+                Button("Tamam", role: .cancel) {
+                    if alertTitle == "Başarılı" {
+                        isPresented = false
+                    }
+                }
+            } message: {
+                Text(alertMessage)
+            }
+        }
+    }
+    
+    private func sendDirectRequest(to worker: WorkerMatch) {
+        guard let tokenValue = token else {
+            alertTitle = "Hata"
+            alertMessage = "Lütfen önce giriş yapın."
+            showAlert = true
+            return
+        }
+        
+        isSendingRequest = true
+        
+        Task {
+            do {
+                try await NetworkManager.shared.createDirectRequest(
+                    workerId: worker.id,
+                    jobId: jobId,
+                    token: tokenValue
+                )
+                await MainActor.run {
+                    isSendingRequest = false
+                    alertTitle = "Başarılı"
+                    alertMessage = "\(worker.name)'ya talep gönderildi!"
+                    showAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    isSendingRequest = false
+                    alertTitle = "Hata"
+                    alertMessage = "Talep gönderilemedi."
+                    showAlert = true
+                }
+            }
+        }
+    }
+}
+
+struct WorkerMatchCard: View {
+    let worker: WorkerMatch
+    let accentColor: Color
+    let onSelect: () -> Void
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                // Profile Photo or Initial
+                if let photoURL = worker.photoURL,
+                   let uiImage = parseBase64Image(photoURL) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 50, height: 50)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.gray.opacity(0.1), lineWidth: 1))
+                } else {
+                    Text(String(worker.name.prefix(1)).uppercased())
+                        .font(.title3)
+                        .fontWeight(.black)
+                        .foregroundColor(.gray)
+                        .frame(width: 50, height: 50)
+                        .background(Color(.systemGray6))
+                        .clipShape(Circle())
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(worker.name)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                    
+                    // Rating Stars
+                    HStack(spacing: 2) {
+                        let val = worker.rating ?? 5.0
+                        ForEach(1...5, id: \.self) { i in
+                            Image(systemName: "star.fill")
+                                .font(.caption2)
+                                .foregroundColor(Double(i) <= val ? .yellow : .gray.opacity(0.3))
+                        }
+                        Text(String(format: "%.1f", val))
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                            .padding(.leading, 4)
+                    }
+                }
+                
+                Spacer()
+            }
+            
+            Divider()
+                .padding(.vertical, 2)
+            
+            // Details
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Konum:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(worker.location ?? "Belirtilmedi")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                
+                if let skills = worker.skills, !skills.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Beceriler:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(skills, id: \.self) { skill in
+                                    Text(skill)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.blue.opacity(0.1))
+                                        .foregroundColor(Color(red: 30/255, green: 58/255, blue: 138/255))
+                                        .cornerRadius(6)
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if let bio = worker.bio, !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Hakkımda:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(bio)
+                            .font(.footnote)
+                            .foregroundColor(.primary)
+                            .lineLimit(3)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            
+            Divider()
+                .padding(.vertical, 2)
+            
+            // Price and Select Button
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SAATLİK ÜCRET")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.secondary)
+                    if let rate = worker.hourlyRate {
+                        Text("\(Int(rate)) TL/saat")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    } else {
+                        Text("Belirtilmedi")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: onSelect) {
+                    Text("Seç")
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(accentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+            }
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 3)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Helper Base64 Parser
+func parseBase64Image(_ base64String: String) -> UIImage? {
+    var cleanString = base64String
+    if let range = base64String.range(of: ";base64,") {
+        cleanString = String(base64String[range.upperBound...])
+    }
+    cleanString = cleanString.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let data = Data(base64Encoded: cleanString) else { return nil }
+    return UIImage(data: data)
+}
+
+// MARK: - Searchable Item Selection Sheet
+struct SearchableItemSelectionSheet: View {
+    @Environment(\.presentationMode) var presentationMode
+    let title: String
+    let placeholder: String
+    let items: [String]
+    @Binding var selectedItem: String
+    var onSelect: ((String) -> Void)? = nil
+    
+    @State private var searchText = ""
+    
+    private var filteredItems: [String] {
+        if searchText.isEmpty {
+            return items
+        } else {
+            return items.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        }
+    }
+    
+    var body: some View {
+        NavigationView {
+            VStack {
+                // Search bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField(placeholder, text: $searchText)
+                        .textFieldStyle(PlainTextFieldStyle())
+                }
+                .padding(10)
+                .background(Color(.systemGray6))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                .padding(.top, 10)
+                
+                // List of items
+                List {
+                    ForEach(filteredItems, id: \.self) { item in
+                        Button(action: {
+                            selectedItem = item
+                            onSelect?(item)
+                            presentationMode.wrappedValue.dismiss()
+                        }) {
+                            HStack {
+                                Text(item)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if item == selectedItem {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                    }
+                }
+                .listStyle(PlainListStyle())
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(leading: Button("Kapat") {
+                presentationMode.wrappedValue.dismiss()
+            })
         }
     }
 }

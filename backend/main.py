@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 import models
-from routes import auth_routes, users, jobs, offers, ai
+from routes import auth_routes, users, jobs, offers, ai, direct_requests
 
 # Create DB tables handled by Alembic
 
@@ -35,6 +35,7 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(offers.router, prefix="/api/v1/offers", tags=["offers"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["ai"])
+app.include_router(direct_requests.router, prefix="/api/v1/direct-requests", tags=["direct-requests"])
 
 @app.get("/")
 def read_root():

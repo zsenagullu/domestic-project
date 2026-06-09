@@ -44,6 +44,8 @@ class User(Base):
     # Yeni eklenen özellikler
     gender = Column(String, nullable=True)
     location = Column(String, nullable=True)
+    photo_url = Column(String, nullable=True)
+    bio = Column(Text, nullable=True)
     
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -89,3 +91,16 @@ class Offer(Base):
 
     job = relationship("Job", back_populates="offers")
     worker = relationship("User", back_populates="offers")
+
+class DirectRequest(Base):
+    __tablename__ = "direct_requests"
+    id = Column(Integer, primary_key=True)
+    customer_id = Column(Integer, ForeignKey("users.id"))
+    worker_id = Column(Integer, ForeignKey("users.id"))
+    job_id = Column(Integer, ForeignKey("jobs.id"))
+    status = Column(String, default="pending")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    customer = relationship("User", foreign_keys=[customer_id])
+    worker = relationship("User", foreign_keys=[worker_id])
+    job = relationship("Job")

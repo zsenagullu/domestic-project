@@ -4,13 +4,13 @@ import FormFlowIntro from '../../components/FormFlowIntro';
 import PostJobIntro from '../../components/PostJobIntro';
 import DirectBookingModal from '../../components/DirectBookingModal';
 import EditJobModal from '../../components/EditJobModal';
-import Results from '../../components/Results';
+import MatchingResultsModal from '../../components/MatchingResultsModal';
 import PostJobModal from '../../components/PostJobModal';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { axiosInstance } from '../../api/axiosInstance';
-import Toast from '../../components/Toast';
+import { useToast } from '../../context/ToastContext';
 import { 
   FileText, 
   User as UserIcon, 
@@ -28,6 +28,7 @@ import {
 interface User {
   id: number;
   name: string;
+  photo_url?: string;
 }
 
 interface Offer {
@@ -53,13 +54,13 @@ interface Job {
 
 export default function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState<'service' | 'offers'>('service');
-  const [formDataSubmitted, setFormDataSubmitted] = useState(false);
+  const [submittedData, setSubmittedData] = useState<{ location: string; houseSize: string; jobId: number } | null>(null);
   const [showDirectBookingModal, setShowDirectBookingModal] = useState(false);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
   const [selectedJobForEdit, setSelectedJobForEdit] = useState<Job | null>(null);
   const [showEditJobModal, setShowEditJobModal] = useState(false);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showToast } = useToast();
 
   // AI Analysis state
   const [aiInput, setAiInput] = useState('');
@@ -141,7 +142,7 @@ export default function CustomerDashboard() {
       setAiResult(result);
     } catch (err) {
       console.error('AI Analysis error:', err);
-      setToast({ message: 'Analiz yapılamadı. Lütfen tekrar deneyiniz.', type: 'error' });
+      showToast('Analiz yapılamadı. Lütfen tekrar deneyiniz.', 'error');
     } finally {
       setIsAnalyzing(false);
     }
@@ -184,15 +185,15 @@ export default function CustomerDashboard() {
   const handleOfferAction = async (offerId: number, status: 'accepted' | 'rejected') => {
     try {
       await axiosInstance.patch(`/offers/${offerId}/status`, { status });
-      setToast({ 
-        message: status === 'accepted' ? 'Teklif kabul edildi!' : 'Teklif reddedildi!', 
-        type: 'success' 
-      });
+      showToast(
+        status === 'accepted' ? 'Teklif kabul edildi!' : 'Teklif reddedildi!', 
+        'success' 
+      );
       // Refresh list
       fetchMyJobsAndOffers();
     } catch (err) {
       console.error(`Error updating offer status to ${status}:`, err);
-      setToast({ message: 'İşlem başarısız oldu. Lütfen tekrar deneyin.', type: 'error' });
+      showToast('İşlem başarısız oldu. Lütfen tekrar deneyin.', 'error');
     }
   };
 
@@ -363,8 +364,6 @@ export default function CustomerDashboard() {
                   }} />
                 </div>
               </section>
-
-              {formDataSubmitted && <Results />}
             </>
           )}
 
@@ -440,9 +439,17 @@ export default function CustomerDashboard() {
                             <div key={offer.id} className="bg-white border border-gray-200 rounded-2xl p-6 hover:shadow-lg transition-all duration-300 border-l-4 border-l-[#1E3A8A]">
                               <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
-                                    <UserIcon size={16} />
-                                  </div>
+                                  {offer.worker?.photo_url ? (
+                                    <img 
+                                      src={offer.worker.photo_url} 
+                                      alt="" 
+                                      className="w-8 h-8 rounded-full object-cover border border-gray-200" 
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
+                                      <UserIcon size={16} />
+                                    </div>
+                                  )}
                                   <span className="font-bold text-gray-900">{offer.worker?.name || 'Uzman'}</span>
                                 </div>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
@@ -506,7 +513,7 @@ export default function CustomerDashboard() {
         <DirectBookingModal
           isOpen={showDirectBookingModal}
           onClose={() => setShowDirectBookingModal(false)}
-          onSuccess={() => setFormDataSubmitted(true)}
+          onSuccess={(data) => setSubmittedData(data)}
         />
         <EditJobModal
           isOpen={showEditJobModal}
@@ -517,16 +524,16 @@ export default function CustomerDashboard() {
           onSuccess={fetchMyJobsAndOffers}
           job={selectedJobForEdit}
         />
+        <MatchingResultsModal
+          isOpen={submittedData !== null}
+          onClose={() => setSubmittedData(null)}
+          location={submittedData?.location || ''}
+          houseSize={submittedData?.houseSize || ''}
+          jobId={submittedData?.jobId || 0}
+        />
       </main>
 
       <Footer />
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
     </div>
   );
 }

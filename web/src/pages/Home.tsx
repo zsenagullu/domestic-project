@@ -6,13 +6,19 @@ import FormSection from '../components/FormSection';
 import Results from '../components/Results';
 import Footer from '../components/Footer';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Home() {
-  const [formDataSubmitted, setFormDataSubmitted] = useState(false);
+  const [submittedData, setSubmittedData] = useState<{ location: string; houseSize: string } | null>(null);
+  const navigate = useNavigate();
 
   const handleScrollToForm = () => {
     const element = document.getElementById("service-details");
     element?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handlePostJob = () => {
+    navigate('/login');
   };
 
   return (
@@ -23,13 +29,18 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-20 relative z-20 w-full mb-20">
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           <FormFlowIntro onToggleForm={handleScrollToForm} />
-          <PostJobIntro />
+          <PostJobIntro onPostJob={handlePostJob} />
         </div>
       </section>
 
-      <FormSection setFormDataSubmitted={setFormDataSubmitted} />
+      <FormSection onSuccess={(data) => setSubmittedData(data)} />
 
-      {formDataSubmitted && <Results />}
+      {submittedData && (
+        <Results 
+          location={submittedData.location} 
+          houseSize={submittedData.houseSize} 
+        />
+      )}
       <Footer />
     </div>
   );

@@ -1,20 +1,20 @@
 import { useState } from 'react';
 import { X, Briefcase, MapPin, Home, DollarSign, Loader2, Calendar } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
-import Toast from './Toast';
+import { useToast } from '../context/ToastContext';
+import LocationSelector from './LocationSelector';
 
 interface DirectBookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (data: { location: string; houseSize: string; jobId: number }) => void;
 }
 
 export default function DirectBookingModal({ isOpen, onClose, onSuccess }: DirectBookingModalProps) {
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showToast } = useToast();
   
   const [formData, setFormData] = useState({
-    location: '',
     house_size: 'medium',
     cleaning_type: 'Genel Temizlik',
     preferred_date: '',
@@ -23,25 +23,24 @@ export default function DirectBookingModal({ isOpen, onClose, onSuccess }: Direc
     price: '',
     special_notes: ''
   });
+  const [location, setLocation] = useState('');
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setToast(null);
 
     const petsText = formData.has_pets ? 'Var' : 'Yok';
     const allergyText = formData.has_allergies ? 'Evet' : 'Hayır';
     
-    // Format: "[Açıklama] | Temizlik: [tip] | Tarih: [tarih] | Evcil Hayvan: [var/yok] | Alerji: [evet/hayır] | Not: [notlar]"
     const combinedDescription = `Hızlı Eşleşme Talebi | Temizlik: ${formData.cleaning_type} | Tarih: ${formData.preferred_date} | Evcil Hayvan: ${petsText} | Alerji: ${allergyText} | Not: ${formData.special_notes || ''}`;
 
     try {
-      await axiosInstance.post('/jobs/', {
+      const response = await axiosInstance.post('/jobs/', {
         title: 'Hızlı Eşleşme Talebi',
         description: combinedDescription,
-        location: formData.location,
+        location: location,
         house_size: formData.house_size,
         price: formData.price ? parseFloat(formData.price) : null,
         service_type: 'DIRECT_BOOKING',
@@ -52,20 +51,24 @@ export default function DirectBookingModal({ isOpen, onClose, onSuccess }: Direc
         special_notes: formData.special_notes
       });
       
-      setToast({ message: 'Hızlı eşleşme talebiniz oluşturuldu!', type: 'success' });
-      setTimeout(() => {
-        onClose();
-        if (onSuccess) onSuccess();
-      }, 1500);
+      showToast('Hızlı eşleşme talebiniz oluşturuldu!', 'success');
+      onClose();
+      if (onSuccess) {
+        onSuccess({
+          location,
+          houseSize: formData.house_size,
+          jobId: response.data.id
+        });
+      }
     } catch (error: any) {
       console.error('Direct Booking error:', error);
       const isAuthError = error.response?.status === 401;
-      setToast({ 
-        message: isAuthError 
+      showToast(
+        isAuthError 
           ? 'Lütfen önce giriş yapın.' 
           : 'Talep oluşturulurken bir hata oluştu.', 
-        type: 'error' 
-      });
+        'error'
+      );
     } finally {
       setLoading(false);
     }
@@ -104,15 +107,12 @@ export default function DirectBookingModal({ isOpen, onClose, onSuccess }: Direc
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
-                  <MapPin size={14} /> Konum
+                  <MapPin size={14} /> Konum (Şehir ve İlçe)
                 </label>
-                <input
-                  required
-                  type="text"
+                <LocationSelector
+                  value={location}
+                  onChange={setLocation}
                   placeholder="İstanbul, Beşiktaş"
-                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
-                  value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
                 />
               </div>
 
@@ -243,13 +243,6 @@ export default function DirectBookingModal({ isOpen, onClose, onSuccess }: Direc
           </form>
         </div>
       </div>
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Briefcase, MapPin, Home, DollarSign, Loader2 } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
-import Toast from './Toast';
+import { useToast } from '../context/ToastContext';
+import LocationSelector from './LocationSelector';
 
 interface EditJobModalProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ interface EditJobModalProps {
 
 export default function EditJobModal({ isOpen, onClose, onSuccess, job }: EditJobModalProps) {
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showToast } = useToast();
   
   const [formData, setFormData] = useState({
     title: '',
@@ -49,7 +50,6 @@ export default function EditJobModal({ isOpen, onClose, onSuccess, job }: EditJo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setToast(null);
 
     try {
       // 1. Update general fields via PATCH /api/v1/jobs/{job_id}
@@ -66,14 +66,12 @@ export default function EditJobModal({ isOpen, onClose, onSuccess, job }: EditJo
         status: formData.status
       });
 
-      setToast({ message: 'İlan başarıyla güncellendi!', type: 'success' });
-      setTimeout(() => {
-        onClose();
-        onSuccess();
-      }, 1500);
+      showToast('İlan başarıyla güncellendi!', 'success');
+      onClose();
+      onSuccess();
     } catch (error: any) {
       console.error('Job update error:', error);
-      setToast({ message: 'Güncelleme esnasında bir hata oluştu.', type: 'error' });
+      showToast('Güncelleme esnasında bir hata oluştu.', 'error');
     } finally {
       setLoading(false);
     }
@@ -134,35 +132,30 @@ export default function EditJobModal({ isOpen, onClose, onSuccess, job }: EditJo
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
-                    <MapPin size={14} /> Konum
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="İstanbul, Beşiktaş"
-                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
-                    value={formData.location}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
+                  <MapPin size={14} /> Konum (Şehir ve İlçe)
+                </label>
+                <LocationSelector
+                  value={formData.location}
+                  onChange={(val) => setFormData({ ...formData, location: val })}
+                  placeholder="İstanbul, Beşiktaş"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
-                    <Home size={14} /> Ev Büyüklüğü
-                  </label>
-                  <select
-                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
-                    value={formData.house_size}
-                    onChange={(e) => setFormData({...formData, house_size: e.target.value})}
-                  >
-                    <option value="small">Küçük (1+0, 1+1)</option>
-                    <option value="medium">Orta (2+1, 3+1)</option>
-                    <option value="large">Büyük (4+1+)</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
+                  <Home size={14} /> Ev Büyüklüğü
+                </label>
+                <select
+                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
+                  value={formData.house_size}
+                  onChange={(e) => setFormData({...formData, house_size: e.target.value})}
+                >
+                  <option value="small">Küçük (1+0, 1+1)</option>
+                  <option value="medium">Orta (2+1, 3+1)</option>
+                  <option value="large">Büyük (4+1+)</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -205,13 +198,6 @@ export default function EditJobModal({ isOpen, onClose, onSuccess, job }: EditJo
           </form>
         </div>
       </div>
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
     </div>
   );
 }

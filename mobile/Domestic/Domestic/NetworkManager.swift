@@ -204,5 +204,213 @@ class NetworkManager {
         let result = try JSONDecoder().decode(AIAnalysisResult.self, from: rawJsonData)
         return result
     }
+    
+    func fetchWorkerMatches(location: String?, houseSize: String?, token: String) async throws -> [WorkerMatch] {
+        var urlComponents = URLComponents(string: "\(baseURL)/users/match")!
+        
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "service_type", value: "DIRECT_BOOKING")
+        ]
+        
+        if let location = location {
+            queryItems.append(URLQueryItem(name: "location", value: location))
+        }
+        if let houseSize = houseSize {
+            queryItems.append(URLQueryItem(name: "house_size", value: houseSize))
+        }
+        
+        urlComponents.queryItems = queryItems
+        
+        guard let url = urlComponents.url else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode([WorkerMatch].self, from: data)
+    }
+    
+    func fetchUserProfile(token: String) async throws -> User {
+        guard let url = URL(string: "\(baseURL)/users/me") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(User.self, from: data)
+    }
+    
+    func updateUserProfile(location: String?, hourlyRate: Double?, skills: [String]?, bio: String?, token: String) async throws -> User {
+        guard let url = URL(string: "\(baseURL)/users/me") else {
+            throw URLError(.badURL)
+        }
+        
+        var profileData: [String: Any] = [:]
+        if let location = location { profileData["location"] = location }
+        if let hourlyRate = hourlyRate { profileData["hourly_rate"] = hourlyRate }
+        if let skills = skills { profileData["skills"] = skills }
+        if let bio = bio { profileData["bio"] = bio }
+        
+        guard let body = try? JSONSerialization.data(withJSONObject: profileData) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(User.self, from: data)
+    }
+    
+    func uploadProfilePhoto(base64Photo: String, token: String) async throws -> User {
+        guard let url = URL(string: "\(baseURL)/users/me/photo") else {
+            throw URLError(.badURL)
+        }
+        
+        let payload = ["photo": base64Photo]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        return try JSONDecoder().decode(User.self, from: data)
+    }
+    
+    func fetchProvinces() async throws -> [TurkeyAPIProvince] {
+        guard let url = URL(string: "https://turkiyeapi.dev/api/v1/provinces") else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoded = try JSONDecoder().decode(TurkeyAPIProvincesResponse.self, from: data)
+        if decoded.status == "OK" {
+            return decoded.data.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+        } else {
+            throw URLError(.badServerResponse)
+        }
+    }
+    
+    func fetchDistricts(provinceId: Int) async throws -> [TurkeyAPIDistrict] {
+        guard let url = URL(string: "https://turkiyeapi.dev/api/v1/provinces/\(provinceId)") else {
+            throw URLError(.badURL)
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        let decoded = try JSONDecoder().decode(TurkeyAPIDistrictsResponse.self, from: data)
+        if decoded.status == "OK" {
+            return decoded.data.districts.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+        } else {
+            throw URLError(.badServerResponse)
+        }
+    }
+    
+    func createDirectRequest(workerId: Int, jobId: Int, token: String) async throws {
+        guard let url = URL(string: "\(baseURL)/direct-requests/") else {
+            throw URLError(.badURL)
+        }
+        
+        let payload: [String: Any] = [
+            "worker_id": workerId,
+            "job_id": jobId
+        ]
+        
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+    }
+    
+    func fetchIncomingRequests(token: String) async throws -> [DirectRequest] {
+        guard let url = URL(string: "\(baseURL)/direct-requests/worker/me") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode([DirectRequest].self, from: data)
+    }
+    
+    func updateDirectRequestStatus(requestId: Int, status: String, token: String) async throws {
+        guard let url = URL(string: "\(baseURL)/direct-requests/\(requestId)/status") else {
+            throw URLError(.badURL)
+        }
+        
+        let payload = ["status": status]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+    }
 }
 

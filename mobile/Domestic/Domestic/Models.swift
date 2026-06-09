@@ -44,12 +44,22 @@ struct User: Codable, Identifiable {
     let allergyInfo: String?
     let hasCriminalRecord: Bool
     let createdAt: String
+    let location: String?
+    let hourlyRate: Double?
+    let skills: [String]?
+    let photoURL: String?
+    let bio: String?
     
     enum CodingKeys: String, CodingKey {
         case id, name, email, role
         case allergyInfo = "allergy_info"
         case hasCriminalRecord = "has_criminal_record"
         case createdAt = "created_at"
+        case location
+        case hourlyRate = "hourly_rate"
+        case skills
+        case photoURL = "photo_url"
+        case bio
     }
 }
 
@@ -134,6 +144,71 @@ struct AIAnalysisResult: Codable {
         case hasPets = "has_pets"
         case hasAllergies = "has_allergies"
         case specialNotes = "special_notes"
+    }
+}
+
+// MARK: - Worker Match Model
+struct WorkerMatch: Codable, Identifiable {
+    let id: Int
+    let name: String
+    let location: String?
+    let hourlyRate: Double?
+    let rating: Double?
+    let skills: [String]?
+    let photoURL: String?
+    let bio: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name, location, skills, rating, bio
+        case hourlyRate = "hourly_rate"
+        case photoURL = "photo_url"
+    }
+}
+
+// MARK: - Turkey API Models
+struct TurkeyAPIProvincesResponse: Codable {
+    let status: String
+    let data: [TurkeyAPIProvince]
+}
+
+struct TurkeyAPIProvince: Codable, Identifiable {
+    let id: Int
+    let name: String
+}
+
+struct TurkeyAPIDistrictsResponse: Codable {
+    let status: String
+    let data: TurkeyAPIDistrictData
+}
+
+struct TurkeyAPIDistrictData: Codable {
+    let id: Int
+    let name: String
+    let districts: [TurkeyAPIDistrict]
+}
+
+struct TurkeyAPIDistrict: Codable, Identifiable {
+    let id: Int
+    let name: String
+}
+
+// MARK: - Direct Request Model
+struct DirectRequest: Codable, Identifiable {
+    let id: Int
+    let customerId: Int
+    let workerId: Int
+    let jobId: Int
+    let status: String
+    let createdAt: String
+    let customer: User?
+    let job: Job?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, status, customer, job
+        case customerId = "customer_id"
+        case workerId = "worker_id"
+        case jobId = "job_id"
+        case createdAt = "created_at"
     }
 }
 

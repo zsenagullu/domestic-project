@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, DollarSign, MessageSquare, Clock, Loader2 } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
+import { useToast } from '../context/ToastContext';
 
 interface OfferModalProps {
   isOpen: boolean;
@@ -16,13 +17,14 @@ export default function OfferModal({ isOpen, onClose, jobId, jobTitle }: OfferMo
     message: '',
     estimated_time: ''
   });
+  const { showToast } = useToast();
 
   if (!isOpen || !jobId) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.offered_price || !formData.message || !formData.estimated_time) {
-      alert('Lütfen tüm zorunlu alanları doldurun.');
+      showToast('Lütfen tüm zorunlu alanları doldurun.', 'error');
       return;
     }
 
@@ -36,7 +38,7 @@ export default function OfferModal({ isOpen, onClose, jobId, jobTitle }: OfferMo
         estimated_time: formData.estimated_time
       });
       
-      alert('Teklifiniz başarıyla gönderildi!');
+      showToast('Teklifiniz başarıyla gönderildi!', 'success');
       onClose();
       // Reset form
       setFormData({
@@ -46,7 +48,7 @@ export default function OfferModal({ isOpen, onClose, jobId, jobTitle }: OfferMo
       });
     } catch (error) {
       console.error('Offer submission error:', error);
-      alert('Teklif gönderilemedi, tekrar deneyin.');
+      showToast('Teklif gönderilemedi, tekrar deneyin.', 'error');
     } finally {
       setLoading(false);
     }

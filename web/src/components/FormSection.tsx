@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Mic, CheckCircle2, MapPin, Home, Loader2, Calendar, Clipboard, ShieldAlert } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
-import Toast from './Toast';
+import { useToast } from '../context/ToastContext';
 
-export default function FormSection({ setFormDataSubmitted }: { setFormDataSubmitted: (val: boolean) => void }) {
+export default function FormSection({ onSuccess }: { onSuccess: (data: { location: string; houseSize: string }) => void }) {
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     saat: 'Haftada 1',
     boyut: '2+1',
@@ -21,7 +21,6 @@ export default function FormSection({ setFormDataSubmitted }: { setFormDataSubmi
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    setToast(null);
 
     const houseSizeMap: { [key: string]: string } = {
       '1+0 (Stüdyo)': 'small',
@@ -54,19 +53,17 @@ export default function FormSection({ setFormDataSubmitted }: { setFormDataSubmi
         special_notes: formData.ozelNotlar
       });
 
-      setToast({ message: 'Talebiniz başarıyla oluşturuldu!', type: 'success' });
-      setTimeout(() => {
-        setFormDataSubmitted(true);
-      }, 1500);
+      showToast('Talebiniz başarıyla oluşturuldu!', 'success');
+      onSuccess({ location: formData.konum, houseSize: houseSizeVal });
     } catch (error: any) {
       console.error('Submit error:', error);
       const isAuthError = error.response?.status === 401;
-      setToast({
-        message: isAuthError 
+      showToast(
+        isAuthError 
           ? 'Lütfen önce giriş yapın.' 
           : 'İstek gönderilirken bir hata oluştu.',
-        type: 'error'
-      });
+        'error'
+      );
     } finally {
       setLoading(false);
     }
@@ -91,7 +88,6 @@ export default function FormSection({ setFormDataSubmitted }: { setFormDataSubmi
 
   return (
     <section id="service-details" className="py-24 bg-white relative">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         
