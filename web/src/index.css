@@ -8,6 +8,19 @@
   --color-domestic-text: #2D3748;
   --shadow-soft: 0 10px 40px -10px rgba(0,0,0,0.08);
   --shadow-red-glow: 0 4px 20px -5px rgba(230,57,70,0.4);
+
+  --animate-toast-in: toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes toast-in {
+    from {
+      transform: translateY(-1rem) scale(0.95);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+  }
 }
 
 @layer base {

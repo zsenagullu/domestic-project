@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Briefcase, MapPin, Home, DollarSign, Loader2 } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
-import Toast from './Toast';
+import { useToast } from '../context/ToastContext';
+import LocationSelector from './LocationSelector';
 
 interface PostJobModalProps {
   isOpen: boolean;
@@ -22,11 +23,10 @@ interface PostJobModalProps {
 
 export default function PostJobModal({ isOpen, onClose, initialData }: PostJobModalProps) {
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     description: initialData?.description || '',
-    location: initialData?.location || '',
     house_size: initialData?.house_size || 'medium',
     price: initialData?.price?.toString() || '',
     cleaning_type: initialData?.cleaning_type || 'Genel Temizlik',
@@ -35,6 +35,7 @@ export default function PostJobModal({ isOpen, onClose, initialData }: PostJobMo
     has_allergies: initialData?.has_allergies || false,
     special_notes: initialData?.special_notes || ''
   });
+  const [location, setLocation] = useState('');
 
   // Update form if initialData changes (e.g. from AI)
   useEffect(() => {
@@ -42,7 +43,6 @@ export default function PostJobModal({ isOpen, onClose, initialData }: PostJobMo
       setFormData({
         title: initialData.title || '',
         description: initialData.description || '',
-        location: initialData.location || '',
         house_size: initialData.house_size || 'medium',
         price: initialData.price?.toString() || '',
         cleaning_type: initialData.cleaning_type || 'Genel Temizlik',
@@ -51,6 +51,7 @@ export default function PostJobModal({ isOpen, onClose, initialData }: PostJobMo
         has_allergies: initialData.has_allergies || false,
         special_notes: initialData.special_notes || ''
       });
+      setLocation(initialData.location || '');
     }
   }, [initialData]);
 
@@ -60,21 +61,22 @@ export default function PostJobModal({ isOpen, onClose, initialData }: PostJobMo
     e.preventDefault();
     setLoading(true);
 
+    const combinedLocation = location;
+
     try {
       await axiosInstance.post('/jobs/', {
         ...formData,
+        location: combinedLocation,
         price: formData.price ? parseFloat(formData.price) : null,
         service_type: "MARKETPLACE_BIDDING"
       });
       
-      setToast({ message: 'İlanınız oluşturuldu!', type: 'success' });
-      setTimeout(() => {
-        onClose();
-      }, 1500);
+      showToast('İlanınız oluşturuldu!', 'success');
+      onClose();
       // Optionally refresh list or redirect
     } catch (error) {
       console.error('Job creation error:', error);
-      setToast({ message: 'İlan oluşturulurken bir hata oluştu.', type: 'error' });
+      showToast('İlan oluşturulurken bir hata oluştu.', 'error');
     } finally {
       setLoading(false);
     }
@@ -135,34 +137,30 @@ export default function PostJobModal({ isOpen, onClose, initialData }: PostJobMo
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
-                    <MapPin size={14} /> Konum
-                  </label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="İstanbul, Beşiktaş"
-                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm"
-                    value={formData.location}
-                    onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
-                    <Home size={14} /> Ev Büyüklüğü
-                  </label>
-                  <select
-                    className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
-                    value={formData.house_size}
-                    onChange={(e) => setFormData({...formData, house_size: e.target.value})}
-                  >
-                    <option value="small">Küçük (1+0, 1+1)</option>
-                    <option value="medium">Orta (2+1, 3+1)</option>
-                    <option value="large">Büyük (4+1+)</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
+                  <MapPin size={14} /> Konum (Şehir ve İlçe)
+                </label>
+                <LocationSelector
+                  value={location}
+                  onChange={setLocation}
+                  placeholder="İstanbul, Beşiktaş"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5 px-1 flex items-center gap-1">
+                  <Home size={14} /> Ev Büyüklüğü
+                </label>
+                <select
+                  className="w-full px-5 py-3.5 bg-gray-50 border-2 border-transparent focus:border-domestic-red/20 focus:bg-white rounded-2xl outline-none transition-all font-medium text-sm appearance-none cursor-pointer"
+                  value={formData.house_size}
+                  onChange={(e) => setFormData({...formData, house_size: e.target.value})}
+                >
+                  <option value="small">Küçük (1+0, 1+1)</option>
+                  <option value="medium">Orta (2+1, 3+1)</option>
+                  <option value="large">Büyük (4+1+)</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -269,13 +267,6 @@ export default function PostJobModal({ isOpen, onClose, initialData }: PostJobMo
           </form>
         </div>
       </div>
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
     </div>
   );
 }

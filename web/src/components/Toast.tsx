@@ -6,9 +6,10 @@ interface ToastProps {
   type: 'success' | 'error';
   onClose: () => void;
   duration?: number;
+  isStandalone?: boolean;
 }
 
-export default function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
+export default function Toast({ message, type, onClose, duration = 3000, isStandalone = false }: ToastProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose();
@@ -19,7 +20,7 @@ export default function Toast({ message, type, onClose, duration = 3000 }: Toast
   const isSuccess = type === 'success';
 
   return (
-    <div className="fixed top-6 right-6 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300">
+    <div className={`${isStandalone ? 'fixed top-6 right-6 z-[9999]' : 'relative'} animate-toast-in`}>
       <div 
         className={`flex items-center gap-3 px-4 py-3.5 rounded-xl shadow-lg border text-sm font-semibold transition-all ${
           isSuccess 

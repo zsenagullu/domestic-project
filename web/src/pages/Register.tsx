@@ -4,6 +4,7 @@ import { axiosInstance } from '../api/axiosInstance';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export default function Register() {
   const [searchParams] = useSearchParams();
@@ -16,6 +17,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth(); 
+  const { showToast } = useToast();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +60,7 @@ export default function Register() {
       console.error("Register Error:", err.response?.data || err.message);
       const errorMessage = err.response?.data?.detail || 'Kayıt olurken bir hata oluştu';
       setError(errorMessage);
-      alert(errorMessage);
+      showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
