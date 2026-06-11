@@ -54,6 +54,16 @@ def create_offer(offer: schemas.OfferCreate, db: Session = Depends(get_db), curr
     db.add(db_offer)
     db.commit()
     db.refresh(db_offer)
+    
+    # Create notification for job owner (Customer)
+    notification = models.Notification(
+        user_id=job.user_id,
+        title="Yeni Teklif",
+        message=f"{current_user.name} isimli çalışan '{job.title}' ilanınız için {db_offer.offered_price} TL teklif verdi."
+    )
+    db.add(notification)
+    db.commit()
+    
     return db_offer
 
 @router.patch("/{offer_id}/status", response_model=schemas.OfferResponse)
@@ -70,6 +80,19 @@ def modify_offer_status(offer_id: int, status_update: schemas.OfferUpdate, db: S
     offer.status = status_update.status
     if status_update.status == models.OfferStatusEnum.accepted:
         job.status = models.JobStatusEnum.in_progress
+        notification = models.Notification(
+            user_id=offer.user_id,
+            title="Teklifiniz Kabul Edildi",
+            message=f"'{job.title}' ilanına verdiğiniz teklif kabul edildi. İş durumunuz 'Devam Ediyor' olarak güncellendi."
+        )
+        db.add(notification)
+    elif status_update.status == models.OfferStatusEnum.rejected:
+        notification = models.Notification(
+            user_id=offer.user_id,
+            title="Teklifiniz Reddedildi",
+            message=f"'{job.title}' ilanına verdiğiniz teklif reddedildi."
+        )
+        db.add(notification)
         
     db.commit()
     db.refresh(offer)

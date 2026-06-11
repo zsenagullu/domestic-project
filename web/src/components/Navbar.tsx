@@ -1,12 +1,80 @@
-import { Building2, Menu, X } from 'lucide-react';
+import { Building2, Menu, X, Bell } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
+import { axiosInstance } from '../api/axiosInstance';
+
+interface NotificationItem {
+  id: number;
+  user_id: number;
+  title: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
 
 export default function Navbar() {
   const navigate = useNavigate();
   const { isAuthenticated, user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  const fetchNotifications = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const res = await axiosInstance.get('/notifications/');
+      setNotifications(res.data.notifications);
+      setUnreadCount(res.data.unread_count);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  const handleMarkAsRead = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await axiosInstance.patch(`/notifications/${id}/read`);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
+  const handleMarkAllAsRead = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await axiosInstance.patch('/notifications/read-all');
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err);
+    }
+  };
+
+  // Poll notifications
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    } else {
+      setNotifications([]);
+      setUnreadCount(0);
+      setIsNotifOpen(false);
+    }
+  }, [isAuthenticated]);
+
+  // Click away to close notifications dropdown
+  useEffect(() => {
+    if (!isNotifOpen) return;
+    const closeNotif = () => setIsNotifOpen(false);
+    document.addEventListener('click', closeNotif);
+    return () => document.removeEventListener('click', closeNotif);
+  }, [isNotifOpen]);
 
   // Close menu when route changes
   useEffect(() => {
@@ -59,6 +127,76 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
+                  {/* Notifications Icon and Dropdown */}
+                  <div className="relative" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => setIsNotifOpen(!isNotifOpen)}
+                      className="relative p-2 rounded-full text-gray-600 hover:text-domestic-red hover:bg-gray-100 transition-all active:scale-95 cursor-pointer flex items-center justify-center"
+                    >
+                      <Bell size={22} />
+                      {unreadCount > 0 && (
+                        <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </button>
+
+                    {isNotifOpen && (
+                      <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-50 animate-fade-in origin-top-right">
+                        <div className="flex justify-between items-center px-4 pb-2 border-b border-gray-100">
+                          <span className="text-sm font-extrabold text-gray-900">Bildirimler</span>
+                          {unreadCount > 0 && (
+                            <button
+                              onClick={handleMarkAllAsRead}
+                              className="text-[11px] font-semibold text-domestic-red hover:underline cursor-pointer"
+                            >
+                              Tümünü Okundu İşaretle
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="max-h-72 overflow-y-auto">
+                          {notifications.length === 0 ? (
+                            <div className="text-center py-6 text-xs text-gray-400 font-medium">
+                              Bildiriminiz bulunmuyor.
+                            </div>
+                          ) : (
+                            notifications.slice(0, 10).map((notif) => (
+                              <div
+                                key={notif.id}
+                                onClick={(e) => !notif.is_read && handleMarkAsRead(notif.id, e)}
+                                className={`px-4 py-3 border-b border-gray-50 last:border-b-0 cursor-pointer transition-colors ${
+                                  notif.is_read ? 'bg-white hover:bg-gray-50' : 'bg-red-50/40 hover:bg-red-50/60'
+                                }`}
+                              >
+                                <div className="flex justify-between items-start gap-1">
+                                  <h4 className={`text-xs ${notif.is_read ? 'font-semibold text-gray-700' : 'font-extrabold text-gray-900'}`}>
+                                    {notif.title}
+                                  </h4>
+                                  {!notif.is_read && (
+                                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 mt-1 shrink-0"></span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+                                  {notif.message}
+                                </p>
+                                <span className="text-[9px] text-gray-400 mt-2 block font-medium">
+                                  {new Date(notif.created_at).toLocaleString('tr-TR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <Link to={getDashboardPath()} className="text-sm font-bold text-gray-600 hover:text-domestic-red transition-colors px-3 py-2">
                     Panelim
                   </Link>
@@ -69,8 +207,70 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Mobile Menu Button */}
-            <div className="md:hidden flex items-center">
+            {/* Mobile Menu Button and Notification Bell */}
+            <div className="md:hidden flex items-center gap-2">
+              {isAuthenticated && (
+                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => setIsNotifOpen(!isNotifOpen)}
+                    className="relative p-2 rounded-xl text-gray-600 hover:text-domestic-red hover:bg-gray-50 transition-colors cursor-pointer flex items-center justify-center"
+                  >
+                    <Bell size={24} />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white ring-2 ring-white">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {isNotifOpen && (
+                    <div className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-50 animate-fade-in origin-top-right">
+                      <div className="flex justify-between items-center px-4 pb-2 border-b border-gray-100">
+                        <span className="text-sm font-extrabold text-gray-900">Bildirimler</span>
+                        {unreadCount > 0 && (
+                          <button
+                            onClick={handleMarkAllAsRead}
+                            className="text-[10px] font-semibold text-domestic-red hover:underline cursor-pointer"
+                          >
+                            Tümünü Oku
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="max-h-64 overflow-y-auto">
+                        {notifications.length === 0 ? (
+                          <div className="text-center py-6 text-xs text-gray-400 font-medium">
+                            Bildiriminiz bulunmuyor.
+                          </div>
+                        ) : (
+                          notifications.slice(0, 10).map((notif) => (
+                            <div
+                              key={notif.id}
+                              onClick={(e) => !notif.is_read && handleMarkAsRead(notif.id, e)}
+                              className={`px-4 py-3 border-b border-gray-50 last:border-b-0 cursor-pointer transition-colors ${
+                                notif.is_read ? 'bg-white' : 'bg-red-50/45'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start gap-1">
+                                <h4 className={`text-xs ${notif.is_read ? 'font-semibold text-gray-700' : 'font-extrabold text-gray-900'}`}>
+                                  {notif.title}
+                                </h4>
+                                {!notif.is_read && (
+                                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 mt-1 shrink-0"></span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-gray-500 mt-1 leading-normal">
+                                {notif.message}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button 
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="p-2 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors"

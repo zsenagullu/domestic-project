@@ -57,9 +57,13 @@ struct CustomerDashboardView: View {
         return Int(total / Double(allOffers.count))
     }
 
+    @State private var unreadCount = 0
+    @State private var notificationsTimer: Timer? = nil
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 25) {
+        TabView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 25) {
                 // Header
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -322,11 +326,27 @@ struct CustomerDashboardView: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 30)
+                }
             }
+            .background(Color(.systemGroupedBackground))
+            .tabItem {
+                Label("Panelim", systemImage: "house.fill")
+            }
+            
+            NotificationsListView(accentColor: domesticRed, unreadCount: $unreadCount)
+                .tabItem {
+                    Label("Bildirimler", systemImage: "bell.fill")
+                }
+                .badge(unreadCount > 0 ? unreadCount : 0)
         }
-        .background(Color(.systemGroupedBackground))
+        .accentColor(domesticRed)
         .onAppear {
             Task { await fetchMyJobsAndOffers() }
+            fetchUnreadCount()
+            startNotificationsTimer()
+        }
+        .onDisappear {
+            stopNotificationsTimer()
         }
         .alert("Bilgi", isPresented: $showComingSoonAlert) {
             Button("Tamam", role: .cancel) {}
@@ -418,6 +438,31 @@ struct CustomerDashboardView: View {
                 }
             }
         }
+    }
+    
+    private func fetchUnreadCount() {
+        guard let tokenValue = token else { return }
+        Task {
+            do {
+                let res = try await NetworkManager.shared.fetchNotifications(token: tokenValue)
+                await MainActor.run {
+                    self.unreadCount = res.unreadCount
+                }
+            } catch {
+                print("❌ Failed to fetch customer unread count: \(error)")
+            }
+        }
+    }
+    
+    private func startNotificationsTimer() {
+        notificationsTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            fetchUnreadCount()
+        }
+    }
+    
+    private func stopNotificationsTimer() {
+        notificationsTimer?.invalidate()
+        notificationsTimer = nil
     }
     
     func fetchMyJobsAndOffers() async {
