@@ -8,6 +8,9 @@ struct WorkerDashboardView: View {
     
     let workerBlue = Color(red: 30/255, green: 58/255, blue: 138/255) // #1E3A8A
 
+    @State private var unreadCount = 0
+    @State private var timer: Timer? = nil
+
     var body: some View {
         TabView {
             OpenJobsView(workerBlue: workerBlue)
@@ -17,7 +20,7 @@ struct WorkerDashboardView: View {
             
             IncomingRequestsView(workerBlue: workerBlue)
                 .tabItem {
-                    Label("Gelen Talepler", systemImage: "bell.fill")
+                    Label("Gelen Talepler", systemImage: "envelope.fill")
                 }
             
             MyOffersView(workerBlue: workerBlue)
@@ -30,12 +33,50 @@ struct WorkerDashboardView: View {
                     Label("Abonelik", systemImage: "crown.fill")
                 }
             
+            NotificationsListView(accentColor: workerBlue, unreadCount: $unreadCount)
+                .tabItem {
+                    Label("Bildirimler", systemImage: "bell.fill")
+                }
+                .badge(unreadCount > 0 ? unreadCount : 0)
+            
             WorkerDashboardProfileView(workerBlue: workerBlue)
                 .tabItem {
                     Label("Profilim", systemImage: "person")
                 }
         }
         .accentColor(workerBlue)
+        .task {
+            fetchUnreadCount()
+            startTimer()
+        }
+        .onDisappear {
+            stopTimer()
+        }
+    }
+    
+    private func fetchUnreadCount() {
+        guard let tokenValue = token else { return }
+        Task {
+            do {
+                let res = try await NetworkManager.shared.fetchNotifications(token: tokenValue)
+                await MainActor.run {
+                    self.unreadCount = res.unreadCount
+                }
+            } catch {
+                print("❌ Failed to fetch unread count: \(error)")
+            }
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            fetchUnreadCount()
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
 }
 

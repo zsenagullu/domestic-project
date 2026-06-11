@@ -138,6 +138,14 @@ def run_complete_job_logic(job_id: int, db: Session, current_user: models.User):
                 worker.completed_jobs = 0
             worker.completed_jobs += 1
             
+            # Create notification for worker
+            notification = models.Notification(
+                user_id=worker_id,
+                title="İş Tamamlandı",
+                message=f"'{job.title}' ilanınız başarıyla tamamlandı. Müşteri tarafından değerlendirilmeyi bekliyorsunuz."
+            )
+            db.add(notification)
+            
     db.commit()
     db.refresh(job)
     return job

@@ -35,6 +35,16 @@ def create_direct_request(
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
+    
+    # Create notification for worker
+    notification = models.Notification(
+        user_id=request.worker_id,
+        title="Yeni İş Talebi",
+        message=f"{current_user.name} size '{job.title}' işi için doğrudan bir talep gönderdi."
+    )
+    db.add(notification)
+    db.commit()
+    
     return db_request
 
 @router.get("/worker/me", response_model=List[schemas.DirectRequestResponse])
@@ -68,10 +78,23 @@ def update_direct_request_status(
         raise HTTPException(status_code=400, detail="Invalid status value. Must be 'accepted' or 'rejected'")
         
     db_request.status = status_update.status
+    job = db.query(models.Job).filter(models.Job.id == db_request.job_id).first()
     if status_update.status == "accepted":
-        job = db.query(models.Job).filter(models.Job.id == db_request.job_id).first()
         if job:
             job.status = models.JobStatusEnum.in_progress
+        notification = models.Notification(
+            user_id=db_request.customer_id,
+            title="İş Talebi Kabul Edildi",
+            message=f"{current_user.name} doğrudan göndermiş olduğunuz iş talebini kabul etti."
+        )
+        db.add(notification)
+    elif status_update.status == "rejected":
+        notification = models.Notification(
+            user_id=db_request.customer_id,
+            title="İş Talebi Reddedildi",
+            message=f"{current_user.name} doğrudan göndermiş olduğunuz iş talebini reddetti."
+        )
+        db.add(notification)
             
     db.commit()
     db.refresh(db_request)

@@ -655,5 +655,60 @@ class NetworkManager {
         
         return try JSONDecoder().decode(Job.self, from: data)
     }
+    
+    func fetchNotifications(token: String) async throws -> NotificationListResponse {
+        guard let url = URL(string: "\(baseURL)/notifications/") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode(NotificationListResponse.self, from: data)
+    }
+    
+    func markNotificationRead(id: Int, token: String) async throws -> NotificationItem {
+        guard let url = URL(string: "\(baseURL)/notifications/\(id)/read") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode(NotificationItem.self, from: data)
+    }
+    
+    func markAllNotificationsRead(token: String) async throws {
+        guard let url = URL(string: "\(baseURL)/notifications/read-all") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+    }
 }
 

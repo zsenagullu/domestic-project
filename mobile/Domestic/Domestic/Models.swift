@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - API Response Wrapper
 struct AuthResponse: Codable {
@@ -262,6 +263,293 @@ struct UserSubscriptionInfo: Codable {
     enum CodingKeys: String, CodingKey {
         case plan
         case expiresAt = "expires_at"
+    }
+}
+
+// MARK: - Notification Models
+struct NotificationItem: Identifiable, Codable {
+    let id: Int
+    let userId: Int
+    let title: String
+    let message: String
+    let isRead: Bool
+    let createdAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case id, title, message
+        case userId = "user_id"
+        case isRead = "is_read"
+        case createdAt = "created_at"
+    }
+}
+
+struct NotificationListResponse: Codable {
+    let notifications: [NotificationItem]
+    let unreadCount: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case notifications
+        case unreadCount = "unread_count"
+    }
+}
+
+// MARK: - Notifications ListView
+struct NotificationsListView: View {
+    let accentColor: Color
+    @Binding var unreadCount: Int
+    
+    @AppStorage("token") var token: String?
+    @State private var notifications: [NotificationItem] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String? = nil
+    
+    @State private var timer: Timer? = nil
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
+                
+                if isLoading && notifications.isEmpty {
+                    ProgressView("Yükleniyor...")
+                        .progressViewStyle(CircularProgressViewStyle(tint: accentColor))
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        Button(action: { Task { await fetchNotifications() } }) {
+                            Text("Yeniden Dene")
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .padding()
+                                .background(accentColor)
+                                .cornerRadius(10)
+                        }
+                    }
+                } else if notifications.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "bell.slash.fill")
+                            .font(.system(size: 64))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("Bildiriminiz bulunmuyor.")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    List {
+                        ForEach(notifications) { item in
+                            NotificationRow(item: item, accentColor: accentColor) {
+                                if !item.isRead {
+                                    Task { await markAsRead(item.id) }
+                                }
+                            }
+                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
+                    }
+                    .listStyle(PlainListStyle())
+                }
+            }
+            .navigationTitle("Bildirimler")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if unreadCount > 0 {
+                        Button("Tümünü Oku") {
+                            Task { await markAllAsRead() }
+                        }
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .foregroundColor(accentColor)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: { Task { await fetchNotifications() } }) {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(accentColor)
+                    }
+                }
+            }
+            .task {
+                await fetchNotifications()
+                startTimer()
+            }
+            .onDisappear {
+                stopTimer()
+            }
+        }
+    }
+    
+    private func startTimer() {
+        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+            Task { await fetchNotifications() }
+        }
+    }
+    
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
+    }
+    
+    private func fetchNotifications() async {
+        guard let tokenValue = token else { return }
+        
+        if notifications.isEmpty {
+            await MainActor.run { isLoading = true }
+        }
+        
+        do {
+            let res = try await NetworkManager.shared.fetchNotifications(token: tokenValue)
+            await MainActor.run {
+                self.notifications = res.notifications
+                self.unreadCount = res.unreadCount
+                self.isLoading = false
+                self.errorMessage = nil
+            }
+        } catch {
+            print("❌ Failed to fetch notifications: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+                if self.notifications.isEmpty {
+                    self.errorMessage = "Bildirimler yüklenirken bir hata oluştu."
+                }
+            }
+        }
+    }
+    
+    private func markAsRead(_ id: Int) async {
+        guard let tokenValue = token else { return }
+        do {
+            _ = try await NetworkManager.shared.markNotificationRead(id: id, token: tokenValue)
+            await MainActor.run {
+                if let index = notifications.firstIndex(where: { $0.id == id }) {
+                    let updatedItem = NotificationItem(
+                        id: notifications[index].id,
+                        userId: notifications[index].userId,
+                        title: notifications[index].title,
+                        message: notifications[index].message,
+                        isRead: true,
+                        createdAt: notifications[index].createdAt
+                    )
+                    notifications[index] = updatedItem
+                }
+                unreadCount = max(0, unreadCount - 1)
+            }
+        } catch {
+            print("❌ Failed to mark notification read: \(error)")
+        }
+    }
+    
+    private func markAllAsRead() async {
+        guard let tokenValue = token else { return }
+        do {
+            try await NetworkManager.shared.markAllNotificationsRead(token: tokenValue)
+            await MainActor.run {
+                self.notifications = self.notifications.map { item in
+                    NotificationItem(
+                        id: item.id,
+                        userId: item.userId,
+                        title: item.title,
+                        message: item.message,
+                        isRead: true,
+                        createdAt: item.createdAt
+                    )
+                }
+                self.unreadCount = 0
+            }
+        } catch {
+            print("❌ Failed to mark all notifications read: \(error)")
+        }
+    }
+}
+
+struct NotificationRow: View {
+    let item: NotificationItem
+    let accentColor: Color
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 15) {
+                if !item.isRead {
+                    Rectangle()
+                        .fill(Color(red: 30/255, green: 58/255, blue: 138/255))
+                        .frame(width: 4)
+                        .cornerRadius(2)
+                        .padding(.vertical, 8)
+                } else {
+                    Spacer()
+                        .frame(width: 4)
+                }
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(item.title)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if !item.isRead {
+                            Circle()
+                                .fill(accentColor)
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    
+                    Text(item.message)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+                    
+                    Text(formatDateString(item.createdAt))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.gray)
+                        .padding(.top, 2)
+                }
+                .padding(.vertical, 12)
+                .padding(.trailing, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white)
+            .cornerRadius(12)
+            .shadow(color: Color.black.opacity(0.03), radius: 5, x: 0, y: 2)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private func formatDateString(_ dateStr: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "tr_TR")
+        
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSS",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss"
+        ]
+        
+        var date: Date? = nil
+        for format in formats {
+            formatter.dateFormat = format
+            if let d = formatter.date(from: dateStr) {
+                date = d
+                break
+            }
+        }
+        
+        if let date = date {
+            formatter.dateFormat = "dd.MM.yyyy HH:mm"
+            return formatter.string(from: date)
+        }
+        
+        return dateStr
     }
 }
 

@@ -123,3 +123,15 @@ class Review(Base):
     reviewer = relationship("User", foreign_keys=[reviewer_id])
     worker = relationship("User", foreign_keys=[worker_id])
     offer = relationship("Offer", back_populates="reviews")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    user = relationship("User")
+
