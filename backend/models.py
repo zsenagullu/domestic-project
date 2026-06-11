@@ -47,6 +47,9 @@ class User(Base):
     photo_url = Column(String, nullable=True)
     bio = Column(Text, nullable=True)
     
+    subscription_plan = Column(String, nullable=True, default=None)
+    subscription_expires_at = Column(DateTime, nullable=True)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
 
     jobs = relationship("Job", back_populates="owner")

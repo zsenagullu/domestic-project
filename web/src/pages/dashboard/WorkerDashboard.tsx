@@ -3,7 +3,7 @@ import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { useAuth } from '../../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import { Briefcase, FileText, User, MapPin, Home, DollarSign, Calendar, Loader2, Inbox } from 'lucide-react';
+import { Briefcase, FileText, User, MapPin, Home, DollarSign, Calendar, Loader2, Inbox, TrendingUp, Star, Check, X, Crown } from 'lucide-react';
 import { axiosInstance } from '../../api/axiosInstance';
 import OfferModal from '../../components/OfferModal';
 import { useToast } from '../../context/ToastContext';
@@ -34,7 +34,7 @@ interface Offer {
 }
 
 export default function WorkerDashboard() {
-  const [activeTab, setActiveTab] = useState<'open_jobs' | 'bids' | 'profile' | 'direct_requests'>('open_jobs');
+  const [activeTab, setActiveTab] = useState<'open_jobs' | 'bids' | 'profile' | 'direct_requests' | 'stats' | 'subscription'>('open_jobs');
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
 
@@ -85,10 +85,54 @@ export default function WorkerDashboard() {
     hourly_rate: '',
     skills: [] as string[],
     about: '',
-    photo_url: ''
+    photo_url: '',
+    rating: 5.0
   });
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+
+  // Subscription states
+  const [currentPlan, setCurrentPlan] = useState<{ plan: string | null; expires_at: string | null } | null>(null);
+  const [isPlanLoading, setIsPlanLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlanToBuy, setSelectedPlanToBuy] = useState<string | null>(null);
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const fetchMyPlan = async () => {
+    setIsPlanLoading(true);
+    try {
+      const response = await axiosInstance.get('/subscriptions/my-plan');
+      setCurrentPlan(response.data);
+    } catch (err) {
+      console.error('Error fetching current plan:', err);
+    } finally {
+      setIsPlanLoading(false);
+    }
+  };
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlanToBuy) return;
+    setIsSubscribing(true);
+    try {
+      await axiosInstance.post('/subscriptions/subscribe', { plan: selectedPlanToBuy });
+      showToast('Aboneliğiniz başarıyla aktif edildi!', 'success');
+      setShowPaymentModal(false);
+      setSelectedPlanToBuy(null);
+      setCardNumber('');
+      setExpiryDate('');
+      setCvv('');
+      fetchMyPlan();
+    } catch (err) {
+      console.error('Error subscribing to plan:', err);
+      showToast('Abonelik işlemi gerçekleştirilemedi. Lütfen tekrar deneyiniz.', 'error');
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'open_jobs') {
@@ -99,6 +143,11 @@ export default function WorkerDashboard() {
       fetchProfile();
     } else if (activeTab === 'direct_requests') {
       fetchDirectRequests();
+    } else if (activeTab === 'stats') {
+      fetchOffers();
+      fetchProfile();
+    } else if (activeTab === 'subscription') {
+      fetchMyPlan();
     }
   }, [activeTab]);
 
@@ -142,7 +191,8 @@ export default function WorkerDashboard() {
         hourly_rate: data.hourly_rate?.toString() || '',
         skills: data.skills || [],
         about: data.bio || '',
-        photo_url: data.photo_url || ''
+        photo_url: data.photo_url || '',
+        rating: data.rating || 5.0
       });
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -295,6 +345,26 @@ export default function WorkerDashboard() {
               }`}
             >
               <Inbox size={18} /> Gelen Talepler
+            </button>
+            <button
+              onClick={() => setActiveTab('stats')}
+              className={`flex items-center gap-2 py-3 px-4 text-sm font-bold rounded-xl transition-all ${
+                activeTab === 'stats'
+                  ? 'bg-blue-50 text-[#1E3A8A] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingUp size={18} /> İstatistikler
+            </button>
+            <button
+              onClick={() => setActiveTab('subscription')}
+              className={`flex items-center gap-2 py-3 px-4 text-sm font-bold rounded-xl transition-all ${
+                activeTab === 'subscription'
+                  ? 'bg-blue-50 text-[#1E3A8A] shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Crown size={18} /> Abonelik
             </button>
             <button
               onClick={() => setActiveTab('profile')}
@@ -569,6 +639,131 @@ export default function WorkerDashboard() {
               </div>
             )}
 
+            {activeTab === 'stats' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-1">İstatistikler</h2>
+                    <p className="text-gray-500 font-medium">
+                      Hizmet performansınızı ve tekliflerinizi buradan takip edebilirsiniz.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={fetchOffers}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-blue-600"
+                    title="Yenile"
+                  >
+                    <Loader2 size={24} className={isOffersLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {isOffersLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 grayscale opacity-70">
+                    <Loader2 size={48} className="animate-spin text-blue-600 mb-4" />
+                    <p className="text-gray-500 font-medium">İstatistikler yükleniyor...</p>
+                  </div>
+                ) : (
+                  <div>
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                      {/* Total Bids */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                        <div className="p-4 bg-blue-500 rounded-2xl text-white">
+                          <FileText size={24} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-blue-600 mb-1">Toplam Teklif Sayısı</p>
+                          <p className="text-3xl font-extrabold text-blue-900">{offers.length}</p>
+                        </div>
+                      </div>
+
+                      {/* Accepted Bids */}
+                      <div className="bg-green-50 border border-green-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                        <div className="p-4 bg-green-500 rounded-2xl text-white">
+                          <Check size={24} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-green-600 mb-1">Kabul Edilen Teklif</p>
+                          <p className="text-3xl font-extrabold text-green-900">
+                            {offers.filter(o => o.status === 'accepted').length}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Rejected Bids */}
+                      <div className="bg-red-50 border border-red-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                        <div className="p-4 bg-red-500 rounded-2xl text-white">
+                          <X size={24} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-red-600 mb-1">Reddedilen Teklif</p>
+                          <p className="text-3xl font-extrabold text-red-900">
+                            {offers.filter(o => o.status === 'rejected').length}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Average Rating */}
+                      <div className="bg-yellow-50 border border-yellow-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                        <div className="p-4 bg-yellow-500 rounded-2xl text-white">
+                          <Star size={24} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-yellow-600 mb-1">Ortalama Puan</p>
+                          <p className="text-3xl font-extrabold text-yellow-900">
+                            {user?.rating ? user.rating.toFixed(1) : '5.0'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Latest Offers */}
+                    <div className="border-t border-gray-100 pt-8">
+                      <h3 className="text-lg font-bold text-gray-900 mb-5">Son Tekliflerim</h3>
+                      {offers.length === 0 ? (
+                        <p className="text-gray-500 text-sm">Henüz bir teklifiniz bulunmamaktadır.</p>
+                      ) : (
+                        <div className="space-y-4">
+                          {[...offers]
+                            .sort((a, b) => b.id - a.id)
+                            .slice(0, 3)
+                            .map((offer) => (
+                              <div key={offer.id} className="border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                                <div>
+                                  <h4 className="font-bold text-gray-900 mb-1">{offer.job?.title || 'Temizlik İşi'}</h4>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                                    <span className="flex items-center gap-1"><MapPin size={12} /> {offer.job?.location || 'Belirtilmedi'}</span>
+                                    <span>Teklif: <span className="font-bold text-green-600">{offer.offered_price} TL</span></span>
+                                    <span>Süre: {offer.estimated_time}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3 self-end sm:self-center">
+                                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                                    offer.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                    offer.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                    {offer.status === 'accepted' ? 'Kabul Edildi' : offer.status === 'rejected' ? 'Reddedildi' : 'Beklemede'}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab('bids');
+                                    }}
+                                    className="px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all"
+                                  >
+                                    Detayları Gör
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'profile' && (
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Profil Bilgileri</h2>
@@ -717,6 +912,248 @@ export default function WorkerDashboard() {
                 )}
               </div>
             )}
+
+            {activeTab === 'subscription' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-1">Abonelik Yönetimi</h2>
+                    <p className="text-gray-500 font-medium">
+                      Teklif verebilmek ve daha fazla ayrıcalıktan yararlanmak için aboneliğinizi yönetin.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={fetchMyPlan}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-blue-600"
+                    title="Yenile"
+                  >
+                    <Loader2 size={24} className={isPlanLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {isPlanLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 grayscale opacity-70">
+                    <Loader2 size={48} className="animate-spin text-blue-600 mb-4" />
+                    <p className="text-gray-500 font-medium">Abonelik bilgileri yükleniyor...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-10">
+                    {/* Mevcut Plan */}
+                    <div className="p-6 rounded-2xl border bg-gradient-to-r from-blue-900 to-[#1E3A8A] text-white shadow-md">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div>
+                          <span className="text-xs uppercase tracking-wider font-bold text-yellow-400 block mb-1">Mevcut Durum</span>
+                          {currentPlan && currentPlan.plan ? (
+                            <div>
+                              <h3 className="text-2xl font-extrabold flex items-center gap-2">
+                                <Crown className="text-yellow-400 animate-pulse" size={24} />
+                                {currentPlan.plan === 'basic' ? 'Temel Plan' : currentPlan.plan === 'professional' ? 'Profesyonel Plan' : 'Premium Plan'}
+                              </h3>
+                              <p className="text-blue-100 text-sm mt-1">
+                                Son Geçerlilik Tarihi: <span className="font-bold text-white">{new Date(currentPlan.expires_at!).toLocaleDateString('tr-TR')}</span>
+                              </p>
+                            </div>
+                          ) : (
+                            <div>
+                              <h3 className="text-2xl font-extrabold flex items-center gap-2 text-red-200">
+                                Aboneliğiniz Yok
+                              </h3>
+                              <p className="text-blue-200 text-sm mt-1">
+                                İş ilanlarına teklif verebilmek için lütfen bir plana abone olun.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {currentPlan && currentPlan.plan && (
+                          <div className="bg-white/10 px-4 py-3 rounded-xl backdrop-blur-sm">
+                            <span className="text-xs text-blue-200 font-bold block mb-1">Plan Özellikleri:</span>
+                            <ul className="text-xs space-y-1">
+                              {currentPlan.plan === 'basic' && (
+                                <>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> 5 teklif/ay</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Profil sayfası</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Temel destek</li>
+                                </>
+                              )}
+                              {currentPlan.plan === 'professional' && (
+                                <>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Sınırsız teklif</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Öne çıkan profil</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Öncelikli destek</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> İstatistikler</li>
+                                </>
+                              )}
+                              {currentPlan.plan === 'premium' && (
+                                <>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Her şey dahil</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Öncelikli eşleşme</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> 7/24 destek</li>
+                                  <li className="flex items-center gap-1"><Check size={12} className="text-green-400" /> Gelişmiş istatistikler</li>
+                                </>
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Plan Seçenekleri */}
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-6 text-center">Abonelik Planları</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {/* Temel Plan */}
+                        <div className={`border rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 relative bg-white ${
+                          currentPlan?.plan === 'basic' 
+                            ? 'border-yellow-500 shadow-xl ring-2 ring-yellow-400' 
+                            : 'border-gray-200 hover:shadow-lg'
+                        }`}>
+                          {currentPlan?.plan === 'basic' && (
+                            <span className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white text-xs px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+                              <Crown size={12} /> Aktif Planınız
+                            </span>
+                          )}
+                          <div>
+                            <h4 className="text-lg font-bold text-gray-900 mb-2">Temel Plan</h4>
+                            <div className="flex items-baseline mb-6">
+                              <span className="text-3xl font-extrabold text-gray-900">99 TL</span>
+                              <span className="text-gray-500 text-sm ml-1">/ay</span>
+                            </div>
+                            <ul className="space-y-3.5 mb-8">
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> 5 teklif/ay
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Profil sayfası
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Temel destek
+                              </li>
+                            </ul>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPlanToBuy('basic');
+                              setShowPaymentModal(true);
+                            }}
+                            disabled={currentPlan?.plan === 'basic'}
+                            className={`w-full py-3 rounded-2xl font-bold transition-all shadow-sm ${
+                              currentPlan?.plan === 'basic'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-900 hover:bg-blue-955 text-white hover:scale-102'
+                            }`}
+                          >
+                            {currentPlan?.plan === 'basic' ? 'Mevcut Plan' : 'Seç'}
+                          </button>
+                        </div>
+
+                        {/* Profesyonel Plan */}
+                        <div className={`border rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 relative bg-white ${
+                          currentPlan?.plan === 'professional' 
+                            ? 'border-yellow-500 shadow-xl ring-2 ring-yellow-400' 
+                            : 'border-blue-900 hover:shadow-lg shadow-md'
+                        }`}>
+                          <span className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-xs px-3.5 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+                            {currentPlan?.plan === 'professional' ? (
+                              <>
+                                <Crown size={12} /> Aktif Planınız
+                              </>
+                            ) : (
+                              'Önerilen'
+                            )}
+                          </span>
+                          <div>
+                            <h4 className="text-lg font-bold text-gray-900 mb-2">Profesyonel</h4>
+                            <div className="flex items-baseline mb-6">
+                              <span className="text-3xl font-extrabold text-blue-900">199 TL</span>
+                              <span className="text-gray-500 text-sm ml-1">/ay</span>
+                            </div>
+                            <ul className="space-y-3.5 mb-8">
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Sınırsız teklif
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Öne çıkan profil
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Öncelikli destek
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> İstatistikler
+                              </li>
+                            </ul>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPlanToBuy('professional');
+                              setShowPaymentModal(true);
+                            }}
+                            disabled={currentPlan?.plan === 'professional'}
+                            className={`w-full py-3 rounded-2xl font-bold transition-all shadow-sm ${
+                              currentPlan?.plan === 'professional'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white hover:scale-102'
+                            }`}
+                          >
+                            {currentPlan?.plan === 'professional' ? 'Mevcut Plan' : 'Seç'}
+                          </button>
+                        </div>
+
+                        {/* Premium Plan */}
+                        <div className={`border rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 relative bg-white ${
+                          currentPlan?.plan === 'premium' 
+                            ? 'border-yellow-500 shadow-xl ring-2 ring-yellow-400' 
+                            : 'border-gray-200 hover:shadow-lg'
+                        }`}>
+                          {currentPlan?.plan === 'premium' && (
+                            <span className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-white text-xs px-3 py-1 rounded-full font-bold shadow-sm flex items-center gap-1">
+                              <Crown size={12} /> Aktif Planınız
+                            </span>
+                          )}
+                          <div>
+                            <h4 className="text-lg font-bold text-gray-900 mb-2">Premium</h4>
+                            <div className="flex items-baseline mb-6">
+                              <span className="text-3xl font-extrabold text-gray-900">399 TL</span>
+                              <span className="text-gray-500 text-sm ml-1">/ay</span>
+                            </div>
+                            <ul className="space-y-3.5 mb-8">
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Her şey dahil
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Öncelikli eşleşme
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> 7/24 destek
+                              </li>
+                              <li className="flex items-center gap-2.5 text-sm font-semibold text-gray-700">
+                                <Check size={16} className="text-green-500" /> Gelişmiş istatistikler
+                              </li>
+                            </ul>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPlanToBuy('premium');
+                              setShowPaymentModal(true);
+                            }}
+                            disabled={currentPlan?.plan === 'premium'}
+                            className={`w-full py-3 rounded-2xl font-bold transition-all shadow-sm ${
+                              currentPlan?.plan === 'premium'
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-900 hover:bg-blue-955 text-white hover:scale-102'
+                            }`}
+                          >
+                            {currentPlan?.plan === 'premium' ? 'Mevcut Plan' : 'Seç'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -729,7 +1166,97 @@ export default function WorkerDashboard() {
         jobId={selectedJob?.id || null}
         jobTitle={selectedJob?.title || ''}
       />
-    </div>
 
+      {/* Ödeme Simülasyon Modali */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs transition-opacity duration-300">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl relative border border-gray-100 transform scale-100 transition-transform duration-300">
+            <button 
+              onClick={() => setShowPaymentModal(false)}
+              className="absolute top-5 right-5 p-1.5 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-2xl font-extrabold text-gray-900 mb-2 flex items-center gap-2">
+              <Crown className="text-yellow-500" size={24} />
+              Kredi Kartı ile Öde
+            </h3>
+            <p className="text-sm text-gray-500 font-medium mb-6">
+              Aboneliğinizi başlatmak için ödeme simülasyonunu tamamlayın.
+            </p>
+            
+            <form onSubmit={handleSubscribe} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Kart Üzerindeki İsim</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Ahmet Yılmaz" 
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-blue-300 focus:bg-white rounded-xl outline-none font-medium text-sm transition-all"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Kart Numarası</label>
+                <input 
+                  type="text" 
+                  required
+                  maxLength={19}
+                  placeholder="1234 5678 1234 5678" 
+                  value={cardNumber}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim();
+                    setCardNumber(val);
+                  }}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-blue-300 focus:bg-white rounded-xl outline-none font-medium text-sm transition-all font-mono"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Son Kullanma (AA/YY)</label>
+                  <input 
+                    type="text" 
+                    required
+                    maxLength={5}
+                    placeholder="12/28" 
+                    value={expiryDate}
+                    onChange={(e) => {
+                      let val = e.target.value.replace(/\D/g, '');
+                      if (val.length > 2) {
+                        val = val.substring(0, 2) + '/' + val.substring(2, 4);
+                      }
+                      setExpiryDate(val);
+                    }}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-blue-300 focus:bg-white rounded-xl outline-none font-medium text-sm transition-all font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">CVV</label>
+                  <input 
+                    type="text" 
+                    required
+                    maxLength={3}
+                    placeholder="123" 
+                    value={cvv}
+                    onChange={(e) => setCvv(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 focus:border-blue-300 focus:bg-white rounded-xl outline-none font-medium text-sm transition-all font-mono"
+                  />
+                </div>
+              </div>
+              
+              <button 
+                type="submit"
+                disabled={isSubscribing}
+                className="w-full py-4 mt-4 bg-gradient-to-r from-blue-900 to-[#1E3A8A] hover:from-blue-950 hover:to-blue-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all disabled:opacity-50 text-sm"
+              >
+                {isSubscribing && <Loader2 size={16} className="animate-spin" />}
+                Ödemeyi Tamamla
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -49,9 +49,12 @@ struct User: Codable, Identifiable {
     let skills: [String]?
     let photoURL: String?
     let bio: String?
+    let rating: Double?
+    let subscriptionPlan: String?
+    let subscriptionExpiresAt: String?
     
     enum CodingKeys: String, CodingKey {
-        case id, name, email, role
+        case id, name, email, role, rating
         case allergyInfo = "allergy_info"
         case hasCriminalRecord = "has_criminal_record"
         case createdAt = "created_at"
@@ -60,6 +63,8 @@ struct User: Codable, Identifiable {
         case skills
         case photoURL = "photo_url"
         case bio
+        case subscriptionPlan = "subscription_plan"
+        case subscriptionExpiresAt = "subscription_expires_at"
     }
 }
 
@@ -239,6 +244,24 @@ struct WorkerStats: Codable {
     
     enum CodingKeys: String, CodingKey {
         case completedJobsCount = "completed_jobs_count"
+    }
+}
+
+// MARK: - Subscription Models
+struct PlanDetail: Codable, Identifiable {
+    let id: String
+    let name: String
+    let price: Double
+    let features: [String]
+}
+
+struct UserSubscriptionInfo: Codable {
+    let plan: String?
+    let expiresAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case plan
+        case expiresAt = "expires_at"
     }
 }
 
