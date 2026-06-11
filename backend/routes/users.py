@@ -85,6 +85,23 @@ def get_matches(
     return top_workers
 
 @router.get("/{user_id}", response_model=schemas.UserResponse)
-def get_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_active_user)):
+def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="User not found")
     return user
+
+@router.get("/{user_id}/stats")
+def get_user_stats(user_id: int, db: Session = Depends(get_db)):
+    # Verify user is a worker
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    completed_jobs_count = db.query(models.Offer).filter(
+        models.Offer.user_id == user_id,
+        models.Offer.status == models.OfferStatusEnum.accepted
+    ).count()
+    return {"completed_jobs_count": completed_jobs_count}

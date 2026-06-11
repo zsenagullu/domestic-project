@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Star, Bookmark, Loader2, ArrowLeft, X } from 'lucide-react';
 import { axiosInstance } from '../api/axiosInstance';
 import { useToast } from '../context/ToastContext';
@@ -11,6 +12,7 @@ interface Worker {
   rating: number | null;
   skills: string[] | null;
   photo_url?: string | null;
+  bio?: string | null;
 }
 
 interface MatchingResultsModalProps {
@@ -188,6 +190,13 @@ export default function MatchingResultsModal({ isOpen, onClose, location, houseS
                           </div>
                         </div>
                       )}
+
+                      {worker.bio && (
+                        <div className="mt-3">
+                          <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-1">HAKKIMDA</p>
+                          <p className="text-xs text-gray-600 italic line-clamp-2">"{worker.bio}"</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -198,12 +207,21 @@ export default function MatchingResultsModal({ isOpen, onClose, location, houseS
                         {worker.hourly_rate ? `${worker.hourly_rate} TL/saat` : 'Belirtilmedi'}
                       </p>
                     </div>
-                    <button 
-                      onClick={() => handleSelectWorker(worker)}
-                      className="bg-domestic-red text-white px-5 py-2.5 rounded-2xl font-bold hover:bg-red-600 transition-colors shadow-md hover:shadow-red-200 active:scale-95 text-xs"
-                    >
-                      Seç
-                    </button>
+                    <div className="flex gap-2">
+                      <Link
+                        to={`/worker/${worker.id}`}
+                        target="_blank"
+                        className="text-gray-500 hover:text-domestic-red px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all font-bold text-xs flex items-center"
+                      >
+                        Profili Gör
+                      </Link>
+                      <button 
+                        onClick={() => handleSelectWorker(worker)}
+                        className="bg-domestic-red text-white px-5 py-2.5 rounded-2xl font-bold hover:bg-red-600 transition-colors shadow-md hover:shadow-red-200 active:scale-95 text-xs"
+                      >
+                        Seç
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -24,6 +24,14 @@ struct CustomerDashboardView: View {
     @State private var isLoadingOffers = false
     @State private var offersErrorMessage: String?
     
+    // Review states
+    @State private var showReviewSheet = false
+    @State private var selectedOfferForReview: Offer? = nil
+    
+    // Edit job states
+    @State private var showEditJobSheet = false
+    @State private var selectedJobForEdit: Job? = nil
+    
     // Matching states
     @State private var showMatchesSheet = false
     @State private var matchedWorkers: [WorkerMatch] = []
@@ -140,20 +148,85 @@ struct CustomerDashboardView: View {
                         .cornerRadius(16)
                         .padding(.horizontal)
                     } else {
-                        VStack(spacing: 16) {
+                        VStack(spacing: 20) {
                             ForEach(myJobs) { job in
-                                if let offers = job.offers, !offers.isEmpty {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Job Card
                                     VStack(alignment: .leading, spacing: 12) {
-                                        Text(job.title)
-                                            .font(.headline)
-                                            .padding(.horizontal, 5)
-                                        
-                                        ForEach(offers) { offer in
-                                            IncomingOfferCard(offer: offer, accentColor: domesticRed) { status in
-                                                Task { await handleOfferAction(offerId: offer.id, status: status) }
+                                        HStack(alignment: .top) {
+                                            VStack(alignment: .leading, spacing: 6) {
+                                                Text(job.title)
+                                                    .font(.headline)
+                                                    .fontWeight(.bold)
+                                                    .foregroundColor(.primary)
+                                                
+                                                HStack(spacing: 8) {
+                                                    let offerCount = job.offers?.count ?? 0
+                                                    Text("\(offerCount) Teklif")
+                                                        .font(.system(size: 10, weight: .bold))
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 4)
+                                                        .background(Color.blue.opacity(0.1))
+                                                        .foregroundColor(.blue)
+                                                        .cornerRadius(5)
+                                                    
+                                                    jobStatusBadge(job.status)
+                                                }
+                                            }
+                                            
+                                            Spacer()
+                                            
+                                            Button(action: {
+                                                selectedJobForEdit = job
+                                                showEditJobSheet = true
+                                            }) {
+                                                Text("İlanı Düzenle")
+                                                    .font(.system(size: 11, weight: .bold))
+                                                    .padding(.horizontal, 10)
+                                                    .padding(.vertical, 6)
+                                                    .background(Color(.systemGray5))
+                                                    .foregroundColor(.primary)
+                                                    .cornerRadius(8)
                                             }
                                         }
                                     }
+                                    .padding(15)
+                                    .background(Color.white)
+                                    .cornerRadius(16)
+                                    .shadow(color: Color.black.opacity(0.04), radius: 5, x: 0, y: 2)
+                                    
+                                    // Job Offers list
+                                    let offers = job.offers ?? []
+                                    if offers.isEmpty {
+                                        Text("Bu ilan için henüz teklif gelmedi")
+                                            .font(.footnote)
+                                            .foregroundColor(.secondary)
+                                            .italic()
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                            .padding(.vertical, 15)
+                                            .background(Color.white.opacity(0.5))
+                                            .cornerRadius(12)
+                                    } else {
+                                        VStack(spacing: 12) {
+                                            ForEach(offers) { offer in
+                                                IncomingOfferCard(
+                                                    offer: offer,
+                                                    accentColor: domesticRed,
+                                                    onAction: { status in
+                                                        Task { await handleOfferAction(offerId: offer.id, status: status) }
+                                                    },
+                                                    onReview: {
+                                                        selectedOfferForReview = offer
+                                                        showReviewSheet = true
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        .padding(.leading, 10)
+                                    }
+                                    
+                                    Divider()
+                                        .padding(.vertical, 8)
                                 }
                             }
                         }
@@ -224,6 +297,20 @@ struct CustomerDashboardView: View {
                 jobId: lastCreatedJobId ?? 0
             )
         }
+        .sheet(isPresented: $showReviewSheet) {
+            if let offer = selectedOfferForReview {
+                ReviewSheet(isPresented: $showReviewSheet, offer: offer, accentColor: domesticRed) {
+                    Task { await fetchMyJobsAndOffers() }
+                }
+            }
+        }
+        .sheet(isPresented: $showEditJobSheet) {
+            if let job = selectedJobForEdit {
+                EditJobSheet(isPresented: $showEditJobSheet, job: job) {
+                    Task { await fetchMyJobsAndOffers() }
+                }
+            }
+        }
     }
     
     func fetchMatches(location: String, houseSize: String) {
@@ -264,8 +351,18 @@ struct CustomerDashboardView: View {
             let userResponse = try await fetchCurrentUserId(token: tokenValue)
             let filtered = allJobs.filter { $0.userId == userResponse.id }
             
+            var detailedJobs: [Job] = []
+            for job in filtered {
+                do {
+                    let detailedJob = try await NetworkManager.shared.fetchJobById(jobId: job.id, token: tokenValue)
+                    detailedJobs.append(detailedJob)
+                } catch {
+                    detailedJobs.append(job)
+                }
+            }
+            
             await MainActor.run {
-                self.myJobs = filtered
+                self.myJobs = detailedJobs
                 self.isLoadingOffers = false
             }
         } catch {
@@ -315,6 +412,27 @@ struct CustomerDashboardView: View {
                     self.isAnalyzing = false
                 }
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func jobStatusBadge(_ status: JobStatus) -> some View {
+        let (text, color) = jobStatusDetails(status)
+        Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(color.opacity(0.1))
+            .foregroundColor(color)
+            .cornerRadius(5)
+    }
+    
+    private func jobStatusDetails(_ status: JobStatus) -> (String, Color) {
+        switch status {
+        case .open: return ("AÇIK", .green)
+        case .inProgress: return ("DEVAM EDİYOR", .blue)
+        case .completed: return ("TAMAMLANDI", .gray)
+        case .cancelled: return ("İPTAL EDİLDİ", .red)
         }
     }
 }
@@ -846,6 +964,7 @@ struct IncomingOfferCard: View {
     let offer: Offer
     let accentColor: Color
     let onAction: (String) -> Void
+    let onReview: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -927,6 +1046,28 @@ struct IncomingOfferCard: View {
                         )
                     }
                 }
+            }
+            
+            if offer.status == .accepted {
+                Divider()
+                    .padding(.vertical, 4)
+                
+                let isReviewed = offer.reviews != nil && !offer.reviews!.isEmpty
+                
+                Button(action: onReview) {
+                    HStack {
+                        Image(systemName: "sparkles")
+                        Text(isReviewed ? "Değerlendirildi" : "Değerlendir")
+                    }
+                    .font(.footnote)
+                    .fontWeight(.bold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(isReviewed ? Color.gray.opacity(0.15) : accentColor)
+                    .foregroundColor(isReviewed ? .secondary : .white)
+                    .cornerRadius(10)
+                }
+                .disabled(isReviewed)
             }
         }
         .padding(15)
@@ -1253,6 +1394,8 @@ struct WorkerMatchesSheet: View {
     @State private var alertMessage = ""
     @State private var isSendingRequest = false
     
+    @State private var selectedWorkerForProfile: WorkerMatch? = nil
+    
     private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255)
     
     var body: some View {
@@ -1299,6 +1442,8 @@ struct WorkerMatchesSheet: View {
                             ForEach(workers) { worker in
                                 WorkerMatchCard(worker: worker, accentColor: domesticRed) {
                                     sendDirectRequest(to: worker)
+                                } onViewProfile: {
+                                    self.selectedWorkerForProfile = worker
                                 }
                             }
                         }
@@ -1325,6 +1470,9 @@ struct WorkerMatchesSheet: View {
             } message: {
                 Text(alertMessage)
             }
+            .sheet(item: $selectedWorkerForProfile) { worker in
+                                WorkerProfileView(worker: worker, jobId: jobId)
+                            }
         }
     }
     
@@ -1367,6 +1515,7 @@ struct WorkerMatchCard: View {
     let worker: WorkerMatch
     let accentColor: Color
     let onSelect: () -> Void
+    let onViewProfile: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1489,15 +1638,32 @@ struct WorkerMatchCard: View {
                 
                 Spacer()
                 
-                Button(action: onSelect) {
-                    Text("Seç")
-                        .font(.footnote)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 8)
-                        .background(accentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
+                HStack(spacing: 8) {
+                    Button(action: onViewProfile) {
+                        Text("Profili Gör")
+                            .font(.footnote)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .foregroundColor(accentColor)
+                            .background(Color.white)
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(accentColor, lineWidth: 1)
+                            )
+                    }
+                    
+                    Button(action: onSelect) {
+                        Text("Seç")
+                            .font(.footnote)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
                 }
             }
         }
@@ -1587,4 +1753,316 @@ struct SearchableItemSelectionSheet: View {
             })
         }
     }
+}
+
+// MARK: - Review Sheet
+struct ReviewSheet: View {
+    @Binding var isPresented: Bool
+    let offer: Offer
+    let accentColor: Color
+    var onSuccess: () -> Void
+    
+    @AppStorage("token") var token: String?
+    
+    @State private var rating = 5
+    @State private var comment = ""
+    @State private var isLoading = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var isSuccess = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Uzman Bilgileri")) {
+                    HStack(spacing: 12) {
+                        if let photoURL = offer.worker?.photoURL,
+                           let uiImage = parseBase64Image(photoURL) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 45, height: 45)
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .resizable()
+                                .frame(width: 45, height: 45)
+                                .foregroundColor(.gray.opacity(0.3))
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(offer.worker?.name ?? "Uzman")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                            Text("Bu uzmanla eşleşen temizlik hizmetini puanlayın.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                
+                Section(header: Text("Puanınız")) {
+                    HStack(spacing: 8) {
+                        Spacer()
+                        ForEach(1...5, id: \.self) { star in
+                            Image(systemName: star <= rating ? "star.fill" : "star")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 36, height: 36)
+                                .foregroundColor(star <= rating ? .yellow : .gray.opacity(0.3))
+                                .onTapGesture {
+                                    rating = star
+                                }
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+                }
+                
+                Section(header: Text("Yorumunuz (Opsiyonel)")) {
+                    TextField("Hizmet hakkında ne düşünüyorsunuz?", text: $comment)
+                        .padding(.vertical, 6)
+                }
+                
+                Section {
+                    Button(action: submitReview) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Gönder")
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .background(isLoading ? Color.gray : accentColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                    .disabled(isLoading)
+                }
+            }
+            .navigationTitle("Değerlendir")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(leading: Button("İptal") { isPresented = false })
+            .alert(isSuccess ? "Başarılı" : "Hata", isPresented: $showAlert) {
+                Button("Tamam") {
+                    if isSuccess {
+                        isPresented = false
+                        onSuccess()
+                    }
+                }
+            } message: {
+                Text(alertMessage)
+            }
+        }
+    }
+    
+    func submitReview() {
+        guard let tokenValue = token else {
+            alertMessage = "Giriş yapmanız gerekiyor."
+            isSuccess = false
+            showAlert = true
+            return
+        }
+        
+        guard let workerId = offer.worker?.id else {
+            alertMessage = "Uzman bilgisi bulunamadı."
+            isSuccess = false
+            showAlert = true
+            return
+        }
+        
+        isLoading = true
+        
+        Task {
+            do {
+                try await NetworkManager.shared.createReview(
+                    offerId: offer.id,
+                    workerId: workerId,
+                    rating: rating,
+                    comment: comment.isEmpty ? nil : comment,
+                    token: tokenValue
+                )
+                
+                await MainActor.run {
+                    isSuccess = true
+                    alertMessage = "Değerlendirmeniz alındı!"
+                    showAlert = true
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    isSuccess = false
+                    alertMessage = "Değerlendirme gönderilemedi."
+                    showAlert = true
+                    isLoading = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Edit Job Sheet
+struct EditJobSheet: View {
+    @Binding var isPresented: Bool
+    let job: Job
+    var onSuccess: () -> Void
+    
+    @AppStorage("token") var token: String?
+    
+    @State private var title = ""
+    @State private var description = ""
+    @State private var location = ""
+    @State private var houseSize = "medium"
+    @State private var budget = ""
+    @State private var status: JobStatus = .open
+    @State private var isLoading = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var isSuccess = false
+    
+    init(isPresented: Binding<Bool>, job: Job, onSuccess: @escaping () -> Void) {
+        self._isPresented = isPresented
+        self.job = job
+        self.onSuccess = onSuccess
+        
+        self._title = State(initialValue: job.title)
+        self._description = State(initialValue: job.description)
+        self._location = State(initialValue: job.location ?? "")
+        self._houseSize = State(initialValue: job.houseSize ?? "medium")
+        if let price = job.price {
+            self._budget = State(initialValue: String(Int(price)))
+        } else {
+            self._budget = State(initialValue: "")
+        }
+        self._status = State(initialValue: job.status)
+    }
+    
+    private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255)
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("İlan Bilgileri")) {
+                    TextField("İlan Başlığı", text: $title)
+                    
+                    ZStack(alignment: .topLeading) {
+                        if description.isEmpty {
+                            Text("Açıklama (En az 10 karakter)")
+                                .foregroundColor(.gray.opacity(0.5))
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                        }
+                        TextEditor(text: $description)
+                            .frame(minHeight: 120)
+                            .lineLimit(4)
+                    }
+                }
+                
+                Section(header: Text("Detaylar")) {
+                    TextField("Konum", text: $location)
+                    
+                    Picker("Ev Büyüklüğü", selection: $houseSize) {
+                        Text("Küçük").tag("small")
+                        Text("Orta").tag("medium")
+                        Text("Büyük").tag("large")
+                    }
+                    
+                    TextField("Tahmini Bütçe (TL, Opsiyonel)", text: $budget)
+                        .keyboardType(.numberPad)
+                    
+                    Picker("İlan Durumu", selection: $status) {
+                        Text("Açık").tag(JobStatus.open)
+                        Text("Devam Ediyor").tag(JobStatus.inProgress)
+                        Text("Tamamlandı").tag(JobStatus.completed)
+                        Text("İptal Edildi").tag(JobStatus.cancelled)
+                    }
+                }
+                
+                Section {
+                    Button(action: saveJob) {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Güncelle")
+                                .bold()
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .background(title.isEmpty || description.count < 10 || isLoading ? Color.gray : domesticRed)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                    .disabled(title.isEmpty || description.count < 10 || isLoading)
+                }
+            }
+            .navigationTitle("İlanı Düzenle")
+            .navigationBarItems(leading: Button("İptal") { isPresented = false })
+            .alert(isSuccess ? "Başarılı" : "Hata", isPresented: $showAlert) {
+                Button("Tamam") {
+                    if isSuccess {
+                        isPresented = false
+                        onSuccess()
+                    }
+                }
+            } message: {
+                Text(alertMessage)
+            }
+        }
+    }
+    
+    func saveJob() {
+        guard let tokenValue = token else {
+            alertMessage = "Lütfen önce giriş yapın."
+            showAlert = true
+            return
+        }
+        
+        isLoading = true
+        let price = Double(budget)
+        
+        Task {
+            do {
+                _ = try await NetworkManager.shared.updateJob(
+                    jobId: job.id,
+                    title: title,
+                    description: description,
+                    location: location.isEmpty ? nil : location,
+                    houseSize: houseSize,
+                    price: price,
+                    token: tokenValue
+                )
+                
+                _ = try await NetworkManager.shared.updateJobStatus(
+                    jobId: job.id,
+                    status: status.rawValue,
+                    token: tokenValue
+                )
+                
+                await MainActor.run {
+                    isSuccess = true
+                    alertMessage = "İlanınız güncellendi!"
+                    showAlert = true
+                    isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    isSuccess = false
+                    alertMessage = "Bir hata oluştu, tekrar deneyin."
+                    showAlert = true
+                    isLoading = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Identifiable Int Wrapper
+struct IdentifiableInt: Identifiable {
+    let id: Int
 }
