@@ -574,5 +574,67 @@ class NetworkManager {
         
         return try JSONDecoder().decode(User.self, from: data)
     }
+    
+    func fetchSubscriptionPlans() async throws -> [PlanDetail] {
+        guard let url = URL(string: "\(baseURL)/subscriptions/plans") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode([PlanDetail].self, from: data)
+    }
+    
+    func fetchMyPlan(token: String) async throws -> UserSubscriptionInfo {
+        guard let url = URL(string: "\(baseURL)/subscriptions/my-plan") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode(UserSubscriptionInfo.self, from: data)
+    }
+    
+    func subscribeToPlan(planId: String, token: String) async throws -> User {
+        guard let url = URL(string: "\(baseURL)/subscriptions/subscribe") else {
+            throw URLError(.badURL)
+        }
+        
+        let payload = ["plan": planId]
+        guard let body = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode(User.self, from: data)
+    }
 }
 

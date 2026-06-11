@@ -22,7 +22,8 @@ import {
   Briefcase,
   Sparkles,
   MapPin,
-  Mic
+  Mic,
+  TrendingUp
 } from 'lucide-react';
 
 interface User {
@@ -54,7 +55,7 @@ interface Job {
 }
 
 export default function CustomerDashboard() {
-  const [activeTab, setActiveTab] = useState<'service' | 'offers'>('service');
+  const [activeTab, setActiveTab] = useState<'service' | 'offers' | 'stats'>('service');
   const [submittedData, setSubmittedData] = useState<{ location: string; houseSize: string; jobId: number } | null>(null);
   const [showDirectBookingModal, setShowDirectBookingModal] = useState(false);
   const [showPostJobModal, setShowPostJobModal] = useState(false);
@@ -294,6 +295,16 @@ export default function CustomerDashboard() {
                   {myJobs.reduce((acc, job) => acc + job.offers.filter(o => o.status === 'pending').length, 0)}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('stats')}
+              className={`flex items-center gap-2 py-3 px-6 text-sm font-bold rounded-xl transition-all ${
+                activeTab === 'stats'
+                  ? 'bg-[#1E3A8A] text-white shadow-md'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingUp size={18} /> İstatistikler
             </button>
           </div>
 
@@ -559,6 +570,114 @@ export default function CustomerDashboard() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'stats' && (
+            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">İstatistikler ve Analizler</h2>
+              
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                {/* Total Jobs */}
+                <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                  <div className="p-4 bg-blue-500 rounded-2xl text-white">
+                    <Briefcase size={24} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-blue-600 mb-1">Toplam İlan Sayısı</p>
+                    <p className="text-3xl font-extrabold text-blue-900">{myJobs.length}</p>
+                  </div>
+                </div>
+
+                {/* Total Offers */}
+                <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                  <div className="p-4 bg-orange-500 rounded-2xl text-white">
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-orange-600 mb-1">Toplam Gelen Teklif</p>
+                    <p className="text-3xl font-extrabold text-orange-900">
+                      {myJobs.reduce((acc, job) => acc + (job.offers?.length || 0), 0)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Accepted Offers */}
+                <div className="bg-green-50 border border-green-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                  <div className="p-4 bg-green-500 rounded-2xl text-white">
+                    <Check size={24} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-green-600 mb-1">Kabul Edilen Teklif</p>
+                    <p className="text-3xl font-extrabold text-green-900">
+                      {myJobs.reduce((acc, job) => acc + (job.offers?.filter(o => o.status === 'accepted').length || 0), 0)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Average Price */}
+                <div className="bg-purple-50 border border-purple-100 rounded-2xl p-6 flex items-center gap-5 shadow-sm">
+                  <div className="p-4 bg-purple-500 rounded-2xl text-white">
+                    <DollarSign size={24} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-purple-600 mb-1">Ortalama Teklif Fiyatı</p>
+                    <p className="text-3xl font-extrabold text-purple-900">
+                      {(() => {
+                        const allOffers = myJobs.flatMap(j => j.offers || []);
+                        const avgPrice = allOffers.length > 0
+                          ? Math.round(allOffers.reduce((acc, o) => acc + o.offered_price, 0) / allOffers.length)
+                          : 0;
+                        return `${avgPrice} TL`;
+                      })()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Latest Jobs */}
+              <div className="border-t border-gray-100 pt-8">
+                <h3 className="text-lg font-bold text-gray-900 mb-5">Son İlanlarım</h3>
+                {myJobs.length === 0 ? (
+                  <p className="text-gray-500 text-sm">Henüz bir ilanınız bulunmamaktadır.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {[...myJobs]
+                      .sort((a, b) => b.id - a.id)
+                      .slice(0, 3)
+                      .map((job) => (
+                        <div key={job.id} className="border border-gray-100 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                          <div>
+                            <h4 className="font-bold text-gray-900 mb-1">{job.title}</h4>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                              <span className="flex items-center gap-1"><MapPin size={12} /> {job.location || 'Belirtilmedi'}</span>
+                              <span>Ev Büyüklüğü: {job.house_size === 'small' ? 'Küçük' : job.house_size === 'medium' ? 'Orta' : 'Büyük'}</span>
+                              <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-bold">{job.offers?.length || 0} Teklif</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 self-end sm:self-center">
+                            <span className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                              job.status === 'open' ? 'bg-green-100 text-green-700' :
+                              job.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {job.status === 'open' ? 'Açık' : job.status === 'in_progress' ? 'Devam Ediyor' : 'Tamamlandı'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setActiveTab('offers');
+                              }}
+                              className="px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all"
+                            >
+                              Detayları Gör
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

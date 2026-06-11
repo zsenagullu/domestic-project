@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timedelta
 
 import models, schemas, auth
 from database import get_db
@@ -11,6 +12,33 @@ router = APIRouter()
 def create_offer(offer: schemas.OfferCreate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_active_user)):
     if current_user.role != models.RoleEnum.worker:
          raise HTTPException(status_code=403, detail="Only workers can create offers")
+         
+    # 1. Enforce active subscription
+    is_active = True
+    if not current_user.subscription_plan:
+        is_active = False
+    elif current_user.subscription_expires_at and current_user.subscription_expires_at < datetime.utcnow():
+        is_active = False
+        
+    if not is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Teklif vermek için aktif bir aboneliğinizin olması gerekmektedir."
+        )
+        
+    # 2. Check 5 offers monthly limit for basic plan
+    if current_user.subscription_plan == "basic":
+        # Calculate billing period start (subscription_expires_at - 30 days)
+        start_date = current_user.subscription_expires_at - timedelta(days=30) if current_user.subscription_expires_at else datetime.utcnow() - timedelta(days=30)
+        offers_count = db.query(models.Offer).filter(
+            models.Offer.user_id == current_user.id,
+            models.Offer.created_at >= start_date
+        ).count()
+        if offers_count >= 5:
+            raise HTTPException(
+                status_code=403,
+                detail="Temel planda aylık en fazla 5 teklif verebilirsiniz. Lütfen planınızı yükseltin."
+            )
          
     job = db.query(models.Job).filter(models.Job.id == offer.job_id).first()
     if not job:

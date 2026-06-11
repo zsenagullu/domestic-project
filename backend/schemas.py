@@ -39,6 +39,10 @@ class UserBase(BaseModel):
     hourly_rate: Optional[float] = Field(default=None, ge=0.0, description="Saatlik ücret (float >= 0)")
     rating: Optional[float] = Field(default=None, ge=1.0, le=5.0, description="Puan (1-5 arası)")
     skills: Optional[List[str]] = Field(default=None, description="Yetkinlikler listesi")
+    
+    # Abonelik bilgileri
+    subscription_plan: Optional[str] = None
+    subscription_expires_at: Optional[datetime] = None
 
 class UserCreate(UserBase):
     password: str
@@ -190,3 +194,16 @@ class DirectRequestResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class SubscribeRequest(BaseModel):
+    plan: str
+
+class PlanDetail(BaseModel):
+    id: str
+    name: str
+    price: float
+    features: List[str]
+
+class UserSubscriptionInfo(BaseModel):
+    plan: Optional[str] = None
+    expires_at: Optional[datetime] = None

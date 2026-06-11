@@ -42,6 +42,16 @@ struct CustomerDashboardView: View {
     // Domestic Red Palette
     private let domesticRed = Color(red: 230/255, green: 57/255, blue: 70/255) // #E63946
 
+    private var totalJobsCount: Int { myJobs.count }
+    private var totalOffersCount: Int { myJobs.reduce(0) { $0 + ($1.offers?.count ?? 0) } }
+    private var acceptedOffersCount: Int { myJobs.reduce(0) { $0 + ($1.offers?.filter({ $0.status == .accepted }).count ?? 0) } }
+    private var averageOfferPrice: Int {
+        let allOffers = myJobs.flatMap { $0.offers ?? [] }
+        guard !allOffers.isEmpty else { return 0 }
+        let total = allOffers.reduce(0.0) { $0 + $1.offeredPrice }
+        return Int(total / Double(allOffers.count))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 25) {
@@ -63,6 +73,57 @@ struct CustomerDashboardView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 40)
+                
+                // MARK: - Özet İstatistikler Section
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Özet İstatistikler")
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                        .padding(.horizontal)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 15) {
+                            // Toplam İlan (Mavi)
+                            MiniStatCard(
+                                title: "Toplam İlan",
+                                value: "\(totalJobsCount)",
+                                iconName: "briefcase.fill",
+                                iconColor: .blue,
+                                bgColor: Color.blue.opacity(0.1)
+                            )
+                            
+                            // Gelen Teklif (Turuncu)
+                            MiniStatCard(
+                                title: "Gelen Teklif",
+                                value: "\(totalOffersCount)",
+                                iconName: "doc.text.fill",
+                                iconColor: .orange,
+                                bgColor: Color.orange.opacity(0.1)
+                            )
+                            
+                            // Kabul Edilen (Yeşil)
+                            MiniStatCard(
+                                title: "Kabul Edilen",
+                                value: "\(acceptedOffersCount)",
+                                iconName: "checkmark.circle.fill",
+                                iconColor: .green,
+                                bgColor: Color.green.opacity(0.1)
+                            )
+                            
+                            // Ort. Fiyat (Mor)
+                            MiniStatCard(
+                                title: "Ort. Fiyat",
+                                value: "\(averageOfferPrice) TL",
+                                iconName: "turkishlirasign.circle.fill",
+                                iconColor: .purple,
+                                bgColor: Color.purple.opacity(0.1)
+                            )
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                .padding(.vertical, 5)
                 
                 // Dashboard Cards
                 VStack(spacing: 20) {
@@ -2065,4 +2126,43 @@ struct EditJobSheet: View {
 // MARK: - Identifiable Int Wrapper
 struct IdentifiableInt: Identifiable {
     let id: Int
+}
+
+struct MiniStatCard: View {
+    let title: String
+    let value: String
+    let iconName: String
+    let iconColor: Color
+    let bgColor: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(bgColor)
+                    .frame(width: 40, height: 40)
+                Image(systemName: iconName)
+                    .foregroundColor(iconColor)
+                    .font(.system(size: 18, weight: .bold))
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .font(.system(size: 18, weight: .black))
+                    .foregroundColor(.primary)
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.04), radius: 5, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.gray.opacity(0.08), lineWidth: 1)
+        )
+    }
 }

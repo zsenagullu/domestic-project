@@ -25,6 +25,11 @@ struct WorkerDashboardView: View {
                     Label("Tekliflerim", systemImage: "doc.text")
                 }
             
+            WorkerSubscriptionView(workerBlue: workerBlue)
+                .tabItem {
+                    Label("Abonelik", systemImage: "crown.fill")
+                }
+            
             WorkerDashboardProfileView(workerBlue: workerBlue)
                 .tabItem {
                     Label("Profilim", systemImage: "person")
@@ -374,6 +379,10 @@ struct WorkerDashboardProfileView: View {
     @State private var showCitySearchSheet = false
     @State private var showDistrictSearchSheet = false
     
+    @State private var averageRating: Double = 5.0
+    @State private var completedJobsCount: Int = 0
+    @State private var offers: [Offer] = []
+    
     let allSkills = [
         "Genel Temizlik",
         "Derin Temizlik",
@@ -412,6 +421,47 @@ struct WorkerDashboardProfileView: View {
                     }
                 } else {
                     Form {
+                        Section(header: Text("İstatistikler")) {
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
+                                // Toplam Teklif
+                                WorkerStatCard(
+                                    title: "Toplam Teklif",
+                                    value: "\(offers.count)",
+                                    iconName: "doc.text.fill",
+                                    iconColor: workerBlue,
+                                    bgColor: workerBlue.opacity(0.1)
+                                )
+                                
+                                // Kabul Edilen
+                                WorkerStatCard(
+                                    title: "Kabul Edilen",
+                                    value: "\(offers.filter { $0.status == .accepted }.count)",
+                                    iconName: "checkmark.circle.fill",
+                                    iconColor: .green,
+                                    bgColor: Color.green.opacity(0.1)
+                                )
+                                
+                                // Ortalama Puan
+                                WorkerStatCard(
+                                    title: "Ort. Puan",
+                                    value: String(format: "%.1f", averageRating),
+                                    iconName: "star.fill",
+                                    iconColor: .yellow,
+                                    bgColor: Color.yellow.opacity(0.15)
+                                )
+                                
+                                // Tamamlanan İş
+                                WorkerStatCard(
+                                    title: "Tamamlanan İş",
+                                    value: "\(completedJobsCount)",
+                                    iconName: "briefcase.fill",
+                                    iconColor: Color(red: 230/255, green: 57/255, blue: 70/255), // #E63946
+                                    bgColor: Color(red: 230/255, green: 57/255, blue: 70/255).opacity(0.1)
+                                )
+                            }
+                            .padding(.vertical, 8)
+                        }
+
                         // 1. Profil Fotoğrafı Bölümü
                         Section(header: Text("Profil Fotoğrafı")) {
                             HStack {
@@ -637,8 +687,14 @@ struct WorkerDashboardProfileView: View {
         
         do {
             let profile = try await NetworkManager.shared.fetchUserProfile(token: currentToken)
+            let statsRes = try? await NetworkManager.shared.fetchWorkerStats(workerId: profile.id)
+            let offersRes = try? await NetworkManager.shared.fetchMyOffers(token: currentToken)
+            
             await MainActor.run {
                 self.fullName = profile.name
+                self.averageRating = profile.rating ?? 5.0
+                self.completedJobsCount = statsRes?.completedJobsCount ?? 0
+                self.offers = offersRes ?? []
                 
                 if let location = profile.location {
                     let parts = location.components(separatedBy: ", ")
@@ -1197,3 +1253,482 @@ struct WorkerDashboardView_Previews: PreviewProvider {
         WorkerDashboardView()
     }
 }
+
+struct WorkerStatCard: View {
+    let title: String
+    let value: String
+    let iconName: String
+    let iconColor: Color
+    let bgColor: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                ZStack {
+                    Circle()
+                        .fill(bgColor)
+                        .frame(width: 36, height: 36)
+                    Image(systemName: iconName)
+                        .foregroundColor(iconColor)
+                        .font(.system(size: 16, weight: .bold))
+                }
+                Spacer()
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary)
+                Text(value)
+                    .font(.system(size: 20, weight: .black))
+                    .foregroundColor(.primary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white)
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.02), radius: 3, x: 0, y: 1)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Worker Subscription View
+struct WorkerSubscriptionView: View {
+    let workerBlue: Color
+    @AppStorage("token") var token: String?
+    
+    @State private var currentPlan: UserSubscriptionInfo? = nil
+    @State private var plans: [PlanDetail] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String? = nil
+    @State private var showPaymentSheet = false
+    @State private var selectedPlanId: String? = nil
+    
+    @State private var showAlert = false
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    
+    // Fallback static plans
+    let staticPlans = [
+        PlanDetail(id: "basic", name: "Temel Plan", price: 99.0, features: ["5 teklif/ay", "Profil sayfası", "Temel destek"]),
+        PlanDetail(id: "professional", name: "Profesyonel Plan", price: 199.0, features: ["Sınırsız teklif", "Öne çıkan profil", "Öncelikli destek", "İstatistikler"]),
+        PlanDetail(id: "premium", name: "Premium Plan", price: 399.0, features: ["Her şey dahil", "Öncelikli eşleşme", "7/24 destek", "Gelişmiş istatistikler"])
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    if isLoading {
+                        ProgressView("Yükleniyor...")
+                            .padding()
+                    } else {
+                        // Current Plan Card
+                        currentPlanView
+                        
+                        Divider()
+                            .padding(.vertical, 8)
+                        
+                        Text("Abonelik Planları")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal)
+                        
+                        // Plans List
+                        VStack(spacing: 16) {
+                            ForEach(plans) { plan in
+                                planCardView(plan: plan)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                .padding(.vertical)
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Abonelik Yönetimi")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        Task { await loadData() }
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(workerBlue)
+                    }
+                }
+            }
+            .onAppear {
+                Task { await loadData() }
+            }
+            .sheet(isPresented: $showPaymentSheet) {
+                if let planId = selectedPlanId, let plan = plans.first(where: { $0.id == planId }) {
+                    PaymentSimulatorSheet(plan: plan, workerBlue: workerBlue, onPaymentComplete: {
+                        Task {
+                            await subscribe(to: planId)
+                        }
+                    })
+                }
+            }
+            .alert(isPresented: $showAlert) {
+                Alert(title: Text(alertTitle), message: Text(alertMessage), dismissButton: .default(Text("Tamam")))
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var currentPlanView: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let activePlan = currentPlan?.plan, !activePlan.isEmpty {
+                // Active Plan Card
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("MEVCUT DURUM")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.yellow)
+                        
+                        Text(planName(activePlan))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        if let expires = currentPlan?.expiresAt {
+                            Text("Son Geçerlilik: \(formatDate(expires))")
+                                .font(.footnote)
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.yellow)
+                }
+                .padding()
+                .background(
+                    LinearGradient(gradient: Gradient(colors: [workerBlue, workerBlue.opacity(0.8)]), startPoint: .topLeading, endPoint: .bottomTrailing)
+                )
+                .cornerRadius(16)
+                .shadow(color: workerBlue.opacity(0.3), radius: 8, x: 0, y: 4)
+                .padding(.horizontal)
+            } else {
+                // No Subscription Card (Warning)
+                HStack(spacing: 15) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.title)
+                        .foregroundColor(.white)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Teklif Vermek İçin Abonelik Gerekli")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Text("İş ilanlarına teklif verebilmek için aşağıdaki planlardan birine abone olmalısınız.")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                }
+                .padding()
+                .background(Color.red)
+                .cornerRadius(12)
+                .shadow(color: Color.red.opacity(0.2), radius: 8, x: 0, y: 4)
+                .padding(.horizontal)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func planCardView(plan: PlanDetail) -> some View {
+        let isActive = currentPlan?.plan == plan.id
+        
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(plan.name)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                        
+                        if plan.id == "professional" {
+                            Text("Önerilen")
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color.yellow.opacity(0.2))
+                                .foregroundColor(.orange)
+                                .cornerRadius(8)
+                        }
+                    }
+                    
+                    Text("\(Int(plan.price)) TL / ay")
+                        .font(.title3)
+                        .fontWeight(.black)
+                        .foregroundColor(workerBlue)
+                }
+                
+                Spacer()
+                
+                if isActive {
+                    Text("AKTİF")
+                        .font(.caption)
+                        .fontWeight(.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.green.opacity(0.1))
+                        .foregroundColor(.green)
+                        .cornerRadius(6)
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(plan.features, id: \.self) { feature in
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.subheadline)
+                        Text(feature)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            
+            Button(action: {
+                selectedPlanId = plan.id
+                showPaymentSheet = true
+            }) {
+                Text(isActive ? "Aboneliği Yenile" : "Satın Al")
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(isActive ? workerBlue.opacity(0.6) : workerBlue)
+                    .cornerRadius(10)
+            }
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isActive ? Color.yellow : Color.clear, lineWidth: 2)
+        )
+        .shadow(color: Color.black.opacity(0.04), radius: 5, x: 0, y: 2)
+    }
+    
+    private func planName(_ planId: String) -> String {
+        switch planId {
+        case "basic": return "Temel Plan"
+        case "professional": return "Profesyonel Plan"
+        case "premium": return "Premium Plan"
+        default: return planId.capitalized
+        }
+    }
+    
+    private func formatDate(_ dateStr: String) -> String {
+        let ISOFormatter = ISO8601DateFormatter()
+        ISOFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        var date = ISOFormatter.date(from: dateStr)
+        if date == nil {
+            let ISOFormatter2 = ISO8601DateFormatter()
+            date = ISOFormatter2.date(from: dateStr)
+        }
+        
+        if date == nil {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            date = formatter.date(from: dateStr)
+        }
+        
+        if date == nil {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            date = formatter.date(from: dateStr)
+        }
+        
+        if date == nil {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            date = formatter.date(from: dateStr)
+        }
+        
+        guard let parsedDate = date else {
+            return dateStr
+        }
+        
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "dd.MM.yyyy"
+        displayFormatter.locale = Locale(identifier: "tr_TR")
+        return displayFormatter.string(from: parsedDate)
+    }
+    
+    private func loadData() async {
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        
+        do {
+            let fetchedPlans = try await NetworkManager.shared.fetchSubscriptionPlans()
+            await MainActor.run {
+                self.plans = fetchedPlans
+            }
+        } catch {
+            print("❌ Failed to fetch subscription plans: \(error)")
+            await MainActor.run {
+                self.plans = staticPlans
+            }
+        }
+        
+        if let token = token {
+            do {
+                let fetchedMyPlan = try await NetworkManager.shared.fetchMyPlan(token: token)
+                await MainActor.run {
+                    self.currentPlan = fetchedMyPlan
+                }
+            } catch {
+                print("❌ Failed to fetch my plan: \(error)")
+                await MainActor.run {
+                    self.currentPlan = nil
+                }
+            }
+        }
+        
+        await MainActor.run {
+            isLoading = false
+        }
+    }
+    
+    private func subscribe(to planId: String) async {
+        guard let token = token else { return }
+        isLoading = true
+        do {
+            let _ = try await NetworkManager.shared.subscribeToPlan(planId: planId, token: token)
+            alertTitle = "Başarılı"
+            alertMessage = "Aboneliğiniz başarıyla aktif edildi!"
+            showAlert = true
+            await loadData()
+        } catch {
+            alertTitle = "Hata"
+            alertMessage = "Abonelik işlemi gerçekleştirilemedi."
+            showAlert = true
+        }
+        isLoading = false
+    }
+}
+
+// MARK: - Payment Simulator Sheet
+struct PaymentSimulatorSheet: View {
+    let plan: PlanDetail
+    let workerBlue: Color
+    var onPaymentComplete: () -> Void
+    
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var cardName = ""
+    @State private var cardNumber = ""
+    @State private var expiryDate = ""
+    @State private var cvv = ""
+    
+    @State private var isProcessing = false
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Plan Detayları")) {
+                    HStack {
+                        Text(plan.name)
+                            .fontWeight(.bold)
+                        Spacer()
+                        Text("\(Int(plan.price)) TL / ay")
+                            .foregroundColor(workerBlue)
+                            .bold()
+                    }
+                }
+                
+                Section(header: Text("Kredi Kartı Bilgileri")) {
+                    TextField("Kart Üzerindeki İsim", text: $cardName)
+                        .autocapitalization(.words)
+                    
+                    TextField("Kart Numarası", text: $cardNumber)
+                        .keyboardType(.numberPad)
+                        .onChange(of: cardNumber) { newValue in
+                            let clean = newValue.replacingOccurrences(of: " ", with: "")
+                            let filtered = String(clean.prefix(16))
+                            var formatted = ""
+                            for (index, char) in filtered.enumerated() {
+                                if index > 0 && index % 4 == 0 {
+                                    formatted.append(" ")
+                                }
+                                formatted.append(char)
+                            }
+                            cardNumber = formatted
+                        }
+                    
+                    HStack {
+                        TextField("AA/YY", text: $expiryDate)
+                            .keyboardType(.numberPad)
+                            .onChange(of: expiryDate) { newValue in
+                                let clean = newValue.replacingOccurrences(of: "/", with: "")
+                                let filtered = String(clean.prefix(4))
+                                if filtered.count > 2 {
+                                    expiryDate = "\(filtered.prefix(2))/\(filtered.suffix(filtered.count - 2))"
+                                } else {
+                                    expiryDate = filtered
+                                }
+                            }
+                        
+                        Spacer()
+                        
+                        TextField("CVV", text: $cvv)
+                            .keyboardType(.numberPad)
+                            .onChange(of: cvv) { newValue in
+                                cvv = String(newValue.prefix(3))
+                            }
+                    }
+                }
+                
+                Section {
+                    Button(action: {
+                        isProcessing = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            isProcessing = false
+                            dismiss()
+                            onPaymentComplete()
+                        }
+                    }) {
+                        if isProcessing {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Text("Ödemeyi Tamamla")
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                    }
+                    .listRowBackground(workerBlue)
+                    .disabled(isProcessing || cardName.isEmpty || cardNumber.count < 19 || expiryDate.count < 5 || cvv.count < 3)
+                }
+            }
+            .navigationTitle("Kredi Kartı ile Öde")
+            .navigationBarItems(trailing: Button("Vazgeç") { dismiss() }.foregroundColor(.secondary))
+        }
+    }
+}
+
