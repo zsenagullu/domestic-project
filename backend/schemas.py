@@ -53,6 +53,25 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+class ReviewCreate(BaseModel):
+    offer_id: int
+    worker_id: int
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = None
+
+class ReviewResponse(BaseModel):
+    id: int
+    offer_id: int
+    reviewer_id: int
+    worker_id: int
+    rating: int
+    comment: Optional[str] = None
+    created_at: datetime
+    reviewer: Optional[UserResponse] = None
+    
+    class Config:
+        from_attributes = True
+
 class UserUpdate(BaseModel):
     location: Optional[str] = None
     hourly_rate: Optional[float] = Field(default=None, ge=0.0, description="Saatlik ücret (float >= 0)")
@@ -131,6 +150,7 @@ class OfferResponse(OfferBase):
     created_at: datetime
     job: Optional[JobMinResponse] = None
     worker: Optional[UserResponse] = None
+    reviews: List[ReviewResponse] = []
     class Config:
         from_attributes = True
 

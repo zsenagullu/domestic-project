@@ -101,9 +101,10 @@ struct Offer: Codable, Identifiable {
     let createdAt: String
     let job: Job? 
     let worker: User?
+    let reviews: [Review]?
     
     enum CodingKeys: String, CodingKey {
-        case id, status, job, message, worker
+        case id, status, job, message, worker, reviews
         case offeredPrice = "offered_price"
         case estimatedTime = "estimated_time"
         case jobId = "job_id"
@@ -209,6 +210,35 @@ struct DirectRequest: Codable, Identifiable {
         case workerId = "worker_id"
         case jobId = "job_id"
         case createdAt = "created_at"
+    }
+}
+
+// MARK: - Review Model
+struct Review: Codable, Identifiable {
+    let id: Int
+    let offerId: Int
+    let reviewerId: Int
+    let workerId: Int
+    let rating: Int
+    let comment: String?
+    let createdAt: String
+    let reviewer: User?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, rating, comment, reviewer
+        case offerId = "offer_id"
+        case reviewerId = "reviewer_id"
+        case workerId = "worker_id"
+        case createdAt = "created_at"
+    }
+}
+
+// MARK: - Worker Stats Model
+struct WorkerStats: Codable {
+    let completedJobsCount: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case completedJobsCount = "completed_jobs_count"
     }
 }
 

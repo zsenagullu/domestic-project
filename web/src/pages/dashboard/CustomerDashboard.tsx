@@ -38,6 +38,7 @@ interface Offer {
   estimated_time: string;
   status: 'pending' | 'accepted' | 'rejected';
   worker?: User;
+  reviews?: any[];
 }
 
 interface Job {
@@ -61,6 +62,47 @@ export default function CustomerDashboard() {
   const [showEditJobModal, setShowEditJobModal] = useState(false);
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { showToast } = useToast();
+
+  // Review System state
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [selectedOfferForReview, setSelectedOfferForReview] = useState<Offer | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const handleOpenReviewModal = (offer: Offer) => {
+    setSelectedOfferForReview(offer);
+    setIsReviewModalOpen(true);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!selectedOfferForReview) return;
+    setIsSubmittingReview(true);
+    try {
+      await axiosInstance.post('/reviews/', {
+        offer_id: selectedOfferForReview.id,
+        worker_id: selectedOfferForReview.worker?.id,
+        rating: reviewRating,
+        comment: reviewComment || null
+      });
+      showToast('Değerlendirmeniz alındı!', 'success');
+      setIsReviewModalOpen(false);
+      setSelectedOfferForReview(null);
+      setReviewRating(5);
+      setReviewComment('');
+      // Refresh list
+      fetchMyJobsAndOffers();
+    } catch (err) {
+      console.error('Error submitting review:', err);
+      showToast('Değerlendirme gönderilemedi. Lütfen tekrar deneyin.', 'error');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const isReviewed = (offer: Offer) => {
+    return !!(offer.reviews && offer.reviews.length > 0);
+  };
 
   // AI Analysis state
   const [aiInput, setAiInput] = useState('');
@@ -493,6 +535,22 @@ export default function CustomerDashboard() {
                                   </button>
                                 </div>
                               )}
+
+                              {offer.status === 'accepted' && (
+                                <div className="mt-4">
+                                  <button
+                                    onClick={() => handleOpenReviewModal(offer)}
+                                    disabled={isReviewed(offer)}
+                                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${
+                                      isReviewed(offer)
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                        : 'bg-red-500 text-white hover:bg-red-600'
+                                    }`}
+                                  >
+                                    <Sparkles size={16} /> {isReviewed(offer) ? 'Değerlendirildi' : 'Değerlendir'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -531,6 +589,116 @@ export default function CustomerDashboard() {
           houseSize={submittedData?.houseSize || ''}
           jobId={submittedData?.jobId || 0}
         />
+
+        {/* Review Modal */}
+        {isReviewModalOpen && selectedOfferForReview && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-x-hidden overflow-y-auto outline-none focus:outline-none bg-black bg-opacity-50">
+            <div className="relative w-full max-w-md mx-auto my-6 px-4">
+              <div className="relative flex flex-col w-full bg-white border-0 rounded-3xl shadow-xl outline-none focus:outline-none overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                  <h3 className="text-xl font-bold text-gray-900">Uzmanı Değerlendir</h3>
+                  <button
+                    onClick={() => {
+                      setIsReviewModalOpen(false);
+                      setSelectedOfferForReview(null);
+                      setReviewRating(5);
+                      setReviewComment('');
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                
+                {/* Body */}
+                <div className="relative p-6 flex-auto space-y-6">
+                  <div className="flex items-center gap-3">
+                    {selectedOfferForReview.worker?.photo_url ? (
+                      <img 
+                        src={selectedOfferForReview.worker.photo_url} 
+                        alt="" 
+                        className="w-12 h-12 rounded-full object-cover border border-gray-200" 
+                      />
+                    ) : (
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500">
+                        <UserIcon size={24} />
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="font-bold text-gray-900">{selectedOfferForReview.worker?.name || 'Uzman'}</h4>
+                      <p className="text-xs text-gray-500">Bu uzmanla eşleşen teklifinizi puanlayın</p>
+                    </div>
+                  </div>
+
+                  {/* Star Rating */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 block">Puanınız</label>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setReviewRating(star)}
+                          className="p-1 focus:outline-none transition-transform hover:scale-110"
+                        >
+                          <svg
+                            className={`w-10 h-10 ${
+                              star <= reviewRating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                            }`}
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                          >
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Comment Textarea */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-700 block">Yorumunuz (Opsiyonel)</label>
+                    <textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      placeholder="Hizmet kalitesi, hız ve iletişim hakkında ne düşünüyorsunuz?"
+                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 focus:border-red-500 focus:outline-none text-sm min-h-[100px] resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-6 border-t border-gray-100 flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setIsReviewModalOpen(false);
+                      setSelectedOfferForReview(null);
+                      setReviewRating(5);
+                      setReviewComment('');
+                    }}
+                    className="px-5 py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-colors"
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    onClick={handleSubmitReview}
+                    disabled={isSubmittingReview}
+                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors shadow-sm flex items-center gap-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    {isSubmittingReview ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" /> Gönderiliyor...
+                      </>
+                    ) : (
+                      'Değerlendirmeyi Gönder'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       <Footer />

@@ -91,6 +91,7 @@ class Offer(Base):
 
     job = relationship("Job", back_populates="offers")
     worker = relationship("User", back_populates="offers")
+    reviews = relationship("Review", back_populates="offer")
 
 class DirectRequest(Base):
     __tablename__ = "direct_requests"
@@ -104,3 +105,17 @@ class DirectRequest(Base):
     customer = relationship("User", foreign_keys=[customer_id])
     worker = relationship("User", foreign_keys=[worker_id])
     job = relationship("Job")
+
+class Review(Base):
+    __tablename__ = "reviews"
+    id = Column(Integer, primary_key=True)
+    offer_id = Column(Integer, ForeignKey("offers.id"))
+    reviewer_id = Column(Integer, ForeignKey("users.id"))
+    worker_id = Column(Integer, ForeignKey("users.id"))
+    rating = Column(Integer)  # 1-5
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
+    worker = relationship("User", foreign_keys=[worker_id])
+    offer = relationship("Offer", back_populates="reviews")

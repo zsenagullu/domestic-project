@@ -25,7 +25,7 @@ struct WorkerDashboardView: View {
                     Label("Tekliflerim", systemImage: "doc.text")
                 }
             
-            WorkerProfileView(workerBlue: workerBlue)
+            WorkerDashboardProfileView(workerBlue: workerBlue)
                 .tabItem {
                     Label("Profilim", systemImage: "person")
                 }
@@ -345,7 +345,7 @@ struct MyOffersView: View {
 }
 
 // MARK: - Profile Tab
-struct WorkerProfileView: View {
+struct WorkerDashboardProfileView: View {
     let workerBlue: Color
     @AppStorage("userName") var userName: String?
     @AppStorage("token") var token: String?
