@@ -70,10 +70,28 @@ export default function CustomerDashboard() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [isCompletingJob, setIsCompletingJob] = useState<number | null>(null);
 
   const handleOpenReviewModal = (offer: Offer) => {
     setSelectedOfferForReview(offer);
     setIsReviewModalOpen(true);
+  };
+
+  const handleCompleteJob = async (job: Job, offer: Offer) => {
+    setIsCompletingJob(job.id);
+    try {
+      await axiosInstance.post(`/jobs/${job.id}/complete`);
+      showToast('İş başarıyla tamamlandı! Lütfen çalışanı değerlendirin.', 'success');
+      // Automatically open the review modal
+      handleOpenReviewModal(offer);
+      // Refresh list
+      fetchMyJobsAndOffers();
+    } catch (err) {
+      console.error('Error completing job:', err);
+      showToast('İş tamamlanırken bir hata oluştu. Lütfen tekrar deneyiniz.', 'error');
+    } finally {
+      setIsCompletingJob(null);
+    }
   };
 
   const handleSubmitReview = async () => {
@@ -548,18 +566,35 @@ export default function CustomerDashboard() {
                               )}
 
                               {offer.status === 'accepted' && (
-                                <div className="mt-4">
-                                  <button
-                                    onClick={() => handleOpenReviewModal(offer)}
-                                    disabled={isReviewed(offer)}
-                                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${
-                                      isReviewed(offer)
-                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                        : 'bg-red-500 text-white hover:bg-red-600'
-                                    }`}
-                                  >
-                                    <Sparkles size={16} /> {isReviewed(offer) ? 'Değerlendirildi' : 'Değerlendir'}
-                                  </button>
+                                <div className="mt-4 space-y-2">
+                                  {job.status === 'in_progress' && (
+                                    <button
+                                      onClick={() => handleCompleteJob(job, offer)}
+                                      disabled={isCompletingJob === job.id}
+                                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-700 transition-all shadow-sm"
+                                    >
+                                      {isCompletingJob === job.id ? (
+                                        <Loader2 size={16} className="animate-spin" />
+                                      ) : (
+                                        <Check size={16} />
+                                      )}
+                                      İşi Tamamla
+                                    </button>
+                                  )}
+                                  
+                                  {(job.status === 'completed' || job.status === 'open') && (
+                                    <button
+                                      onClick={() => handleOpenReviewModal(offer)}
+                                      disabled={isReviewed(offer)}
+                                      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${
+                                        isReviewed(offer)
+                                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                          : 'bg-red-500 text-white hover:bg-red-600'
+                                      }`}
+                                    >
+                                      <Sparkles size={16} /> {isReviewed(offer) ? 'Değerlendirildi' : 'Değerlendir'}
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>

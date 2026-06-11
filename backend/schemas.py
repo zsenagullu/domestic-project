@@ -43,6 +43,7 @@ class UserBase(BaseModel):
     # Abonelik bilgileri
     subscription_plan: Optional[str] = None
     subscription_expires_at: Optional[datetime] = None
+    completed_jobs: Optional[int] = 0
 
 class UserCreate(UserBase):
     password: str

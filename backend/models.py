@@ -49,6 +49,7 @@ class User(Base):
     
     subscription_plan = Column(String, nullable=True, default=None)
     subscription_expires_at = Column(DateTime, nullable=True)
+    completed_jobs = Column(Integer, default=0, nullable=False)
     
     created_at = Column(DateTime, default=datetime.utcnow)
 

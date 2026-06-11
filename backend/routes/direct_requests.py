@@ -68,6 +68,11 @@ def update_direct_request_status(
         raise HTTPException(status_code=400, detail="Invalid status value. Must be 'accepted' or 'rejected'")
         
     db_request.status = status_update.status
+    if status_update.status == "accepted":
+        job = db.query(models.Job).filter(models.Job.id == db_request.job_id).first()
+        if job:
+            job.status = models.JobStatusEnum.in_progress
+            
     db.commit()
     db.refresh(db_request)
     return db_request

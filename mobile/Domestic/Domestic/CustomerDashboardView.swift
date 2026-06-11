@@ -28,6 +28,11 @@ struct CustomerDashboardView: View {
     @State private var showReviewSheet = false
     @State private var selectedOfferForReview: Offer? = nil
     
+    // Job Completion States
+    @State private var isCompletingJob = false
+    @State private var showCompleteAlert = false
+    @State private var completeAlertMessage = ""
+    
     // Edit job states
     @State private var showEditJobSheet = false
     @State private var selectedJobForEdit: Job? = nil
@@ -272,6 +277,7 @@ struct CustomerDashboardView: View {
                                             ForEach(offers) { offer in
                                                 IncomingOfferCard(
                                                     offer: offer,
+                                                    jobStatus: job.status,
                                                     accentColor: domesticRed,
                                                     onAction: { status in
                                                         Task { await handleOfferAction(offerId: offer.id, status: status) }
@@ -279,6 +285,9 @@ struct CustomerDashboardView: View {
                                                     onReview: {
                                                         selectedOfferForReview = offer
                                                         showReviewSheet = true
+                                                    },
+                                                    onComplete: {
+                                                        completeJob(job: job, offer: offer)
                                                     }
                                                 )
                                             }
@@ -323,6 +332,15 @@ struct CustomerDashboardView: View {
             Button("Tamam", role: .cancel) {}
         } message: {
             Text("Bu özellik yakında geliyor")
+        }
+        .alert("Başarılı", isPresented: $showCompleteAlert) {
+            Button("Tamam", role: .cancel) {
+                if selectedOfferForReview != nil {
+                    showReviewSheet = true
+                }
+            }
+        } message: {
+            Text(completeAlertMessage)
         }
         .sheet(isPresented: $showCreateJobSheet) {
             if let data = aiInitialJobData {
@@ -442,6 +460,31 @@ struct CustomerDashboardView: View {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, _) = try await URLSession.shared.data(for: request)
         return try JSONDecoder().decode(User.self, from: data)
+    }
+    
+    func completeJob(job: Job, offer: Offer) {
+        guard let tokenValue = token else { return }
+        
+        isCompletingJob = true
+        
+        Task {
+            do {
+                _ = try await NetworkManager.shared.completeJob(jobId: job.id, token: tokenValue)
+                await MainActor.run {
+                    self.isCompletingJob = false
+                    self.completeAlertMessage = "İş tamamlandı! Lütfen çalışanı değerlendirin."
+                    self.selectedOfferForReview = offer
+                    self.showCompleteAlert = true
+                }
+            } catch {
+                print("❌ Failed to complete job: \(error)")
+                await MainActor.run {
+                    self.isCompletingJob = false
+                    self.completeAlertMessage = "İş tamamlanırken bir hata oluştu."
+                    self.showCompleteAlert = true
+                }
+            }
+        }
     }
     
     func handleOfferAction(offerId: Int, status: String) async {
@@ -1023,9 +1066,11 @@ struct DashboardCard: View {
 
 struct IncomingOfferCard: View {
     let offer: Offer
+    let jobStatus: JobStatus
     let accentColor: Color
     let onAction: (String) -> Void
     let onReview: () -> Void
+    let onComplete: () -> Void
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1113,22 +1158,38 @@ struct IncomingOfferCard: View {
                 Divider()
                     .padding(.vertical, 4)
                 
-                let isReviewed = offer.reviews != nil && !offer.reviews!.isEmpty
-                
-                Button(action: onReview) {
-                    HStack {
-                        Image(systemName: "sparkles")
-                        Text(isReviewed ? "Değerlendirildi" : "Değerlendir")
+                if jobStatus == .inProgress {
+                    Button(action: onComplete) {
+                        HStack {
+                            Image(systemName: "checkmark.seal.fill")
+                            Text("İşi Tamamla")
+                        }
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 230/255, green: 57/255, blue: 70/255))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                     }
-                    .font(.footnote)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(isReviewed ? Color.gray.opacity(0.15) : accentColor)
-                    .foregroundColor(isReviewed ? .secondary : .white)
-                    .cornerRadius(10)
+                } else if jobStatus == .completed || jobStatus == .open {
+                    let isReviewed = offer.reviews != nil && !offer.reviews!.isEmpty
+                    
+                    Button(action: onReview) {
+                        HStack {
+                            Image(systemName: "sparkles")
+                            Text(isReviewed ? "Değerlendirildi" : "Değerlendir")
+                        }
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(isReviewed ? Color.gray.opacity(0.15) : accentColor)
+                        .foregroundColor(isReviewed ? .secondary : .white)
+                        .cornerRadius(10)
+                    }
+                    .disabled(isReviewed)
                 }
-                .disabled(isReviewed)
             }
         }
         .padding(15)

@@ -636,5 +636,24 @@ class NetworkManager {
         
         return try JSONDecoder().decode(User.self, from: data)
     }
+    
+    func completeJob(jobId: Int, token: String) async throws -> Job {
+        guard let url = URL(string: "\(baseURL)/jobs/\(jobId)/complete") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, 200...299 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+        
+        return try JSONDecoder().decode(Job.self, from: data)
+    }
 }
 

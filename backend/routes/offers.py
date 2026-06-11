@@ -68,6 +68,9 @@ def modify_offer_status(offer_id: int, status_update: schemas.OfferUpdate, db: S
          raise HTTPException(status_code=403, detail="Not authorized to modify this offer status")
     
     offer.status = status_update.status
+    if status_update.status == models.OfferStatusEnum.accepted:
+        job.status = models.JobStatusEnum.in_progress
+        
     db.commit()
     db.refresh(offer)
     return offer

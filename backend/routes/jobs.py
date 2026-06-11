@@ -81,3 +81,63 @@ def update_job(
     db.commit()
     db.refresh(job)
     return job
+
+@router.get("/{job_id}/complete", response_model=schemas.JobResponse)
+def complete_job_get(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    return run_complete_job_logic(job_id, db, current_user)
+
+@router.post("/{job_id}/complete", response_model=schemas.JobResponse)
+def complete_job_post(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    return run_complete_job_logic(job_id, db, current_user)
+
+def run_complete_job_logic(job_id: int, db: Session, current_user: models.User):
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    if job.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the job owner can complete this job")
+        
+    if job.status != models.JobStatusEnum.in_progress:
+        raise HTTPException(
+            status_code=400,
+            detail="Only jobs currently in progress can be completed."
+        )
+        
+    job.status = models.JobStatusEnum.completed
+    
+    # Increment worker's completed_jobs
+    accepted_offer = db.query(models.Offer).filter(
+        models.Offer.job_id == job_id,
+        models.Offer.status == models.OfferStatusEnum.accepted
+    ).first()
+    
+    worker_id = None
+    if accepted_offer:
+        worker_id = accepted_offer.user_id
+    else:
+        db_request = db.query(models.DirectRequest).filter(
+            models.DirectRequest.job_id == job_id,
+            models.DirectRequest.status == "accepted"
+        ).first()
+        if db_request:
+            worker_id = db_request.worker_id
+            
+    if worker_id:
+        worker = db.query(models.User).filter(models.User.id == worker_id).first()
+        if worker:
+            if worker.completed_jobs is None:
+                worker.completed_jobs = 0
+            worker.completed_jobs += 1
+            
+    db.commit()
+    db.refresh(job)
+    return job
